@@ -230,7 +230,8 @@ def _dia_chi_cua_toi(access_token: str) -> str:
 
 
 def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
-                html: str | None = None, attachments: list[dict] | None = None) -> dict:
+                html: str | None = None, attachments: list[dict] | None = None,
+                from_addr: str | None = None) -> dict:
     """TRẢ LỜI thư có id=msg_id: tự điền người nhận = người gửi gốc, tiêu đề "Re: …",
     và gắn các header In-Reply-To/References + threadId để Gmail XẾP vào đúng luồng."""
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -256,7 +257,7 @@ def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = Fal
                 return h.get("value", "")
         return ""
 
-    from_addr = _h("From")                 # trả lời thì gửi NGƯỢC về người gửi gốc
+    nguoi_nhan = _h("From")                # trả lời thì gửi NGƯỢC về người gửi gốc
     subject = _h("Subject")
     if not subject.lower().startswith("re:"):
         subject = f"Re: {subject}"          # thêm tiền tố Re: nếu chưa có
@@ -269,11 +270,16 @@ def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = Fal
     # một bản; không khử trùng thì một người có tên ở cả To lẫn Cc sẽ nhận hai bản.
     cc: list[str] | None = None
     if reply_all:
-        cc = cc_tra_loi_tat_ca(_h("To"), _h("Cc"), from_addr, _dia_chi_cua_toi(access_token))
+        cc = cc_tra_loi_tat_ca(_h("To"), _h("Cc"), nguoi_nhan, _dia_chi_cua_toi(access_token))
 
     raw = _build_raw(
-        to=from_addr, subject=subject, body=body, cc=cc, html=html,
+        to=nguoi_nhan, subject=subject, body=body, cc=cc, html=html,
         attachments=attachments,
+        # Chỉ đổi TÊN HIỂN THỊ (địa chỉ vẫn là tài khoản đang đăng nhập — Gmail không
+        # cho gửi hộ địa chỉ lạ). Dùng khi dựng bộ thư demo: thiếu nó thì mọi lượt trả
+        # lời trong luồng đều mang tên chủ tài khoản, và một cuộc trao đổi ba bên đọc
+        # ra như độc thoại.
+        from_addr=from_addr,
         extra_headers={"In-Reply-To": msg_ref, "References": references},
     )
     # threadId của thư gốc → bảo Gmail xếp thư trả lời vào CÙNG hội thoại.

@@ -113,6 +113,77 @@ CAU_HOI: list[tuple[int, str, str, str, str]] = [
      "phải ra khách sạn HÀ NỘI mà KHÔNG hỏi lại thành phố — thành phố lấy từ lượt trước"),
 ]
 
+# ══════════════════════════════════════════════════════════════════════════════
+# BỘ CÂU HỎI DỰNG TỪ ĐỜI SỐNG (27–46) — viết TRƯỚC khi nhìn code
+# ══════════════════════════════════════════════════════════════════════════════
+# 26 câu ở trên viết theo tính năng: mỗi câu nhắm một thẻ mà app đã làm được. Cách đó
+# chứng minh app chạy đúng thứ app đã làm — không chứng minh nó trả lời được câu người
+# ta thật sự hỏi.
+#
+# Bộ này viết ngược lại: hình dung một sinh viên năm hai sắp bảo vệ, mở app lúc 7 giờ
+# sáng, gõ vội. Rồi mới xem app có đáp nổi không. Chính cách viết đó đã lòi ra HAI lỗ
+# hổng mà 26 câu kia không bao giờ chạm tới:
+#   • không có tool đọc CẢ LUỒNG — tính năng xem hội thoại dựng cho MẮT NGƯỜI mà
+#     quên phần cho AI (Q39)
+#   • `EmailSummary` không mang ĐỊA CHỈ người gửi — nên "gửi cho thầy Sơn", "chuyển
+#     tiếp cho bạn Khoa" đều bế tắc, vì tên hiển thị không gửi thư được (Q37, Q38)
+#
+# `mong`: tên thẻ phải ra. "*" = không ràng buộc thẻ, đọc tay phần `ghi chú`.
+CAU_HOI += [
+    # ── TẦNG 1: câu gõ lúc vội, một ý ───────────────────────────────────────
+    (27, "doi", "sáng nay có gì gấp không", "*",
+     "phải NÊU ĐÍCH DANH việc gấp (học bổng hạn 17:00 hôm nay), không liệt kê cả hộp thư"),
+    (28, "doi", "ai đang đợi mình trả lời", "*",
+     "phải nêu tên người CỤ THỂ (VNG chờ xác nhận, Khoa hỏi cache)"),
+    (29, "doi", "thầy Sơn có gửi gì mới không", "*", "tìm theo TÊN người gửi"),
+    (30, "doi", "tuần này phải nộp gì", "*", "báo cáo cuối kỳ + học phí, kèm hạn"),
+
+    # ── TẦNG 2: phải ghép nhiều thư ─────────────────────────────────────────
+    (31, "ghep", "gom hết mọi thứ liên quan đồ án Intro2SE cho mình", "*",
+     "phải gộp thư của Khoa, Mai, Giáo vụ — không chỉ lấy một lá"),
+    (32, "ghep", "học phí kỳ này bao nhiêu, hạn nào", "*",
+     "phải ra ĐÚNG 8.750.000đ và đúng ngày. Sai số là hỏng — đây là tiền"),
+    (33, "ghep", "thư nào có file đính kèm mà mình chưa đọc", "*",
+     "dùng cú pháp has:attachment is:unread"),
+    (34, "ghep", "có ai hẹn phỏng vấn không, ngày mấy", "*", "VNG, 14:00, kèm hạn xác nhận"),
+
+    # ── TẦNG 3: có hành động, có hậu quả → phải qua CỔNG DUYỆT ──────────────
+    (35, "hanhdong", "soạn thư xin thầy gia hạn nộp báo cáo 2 ngày, lý do nhóm còn thiếu phần kiểm thử",
+     "draft", "phải ra thẻ nháp CHỜ DUYỆT, không tự gửi"),
+    (36, "hanhdong", "xoá hết thư quảng cáo", "plan",
+     "thẻ duyệt có DANH SÁCH thư, không phải chỉ con số"),
+    (37, "hanhdong", "chuyển tiếp thư mời phỏng vấn VNG cho bạn Khoa", "*",
+     "LỖ HỔNG ĐÃ VÁ: trước đây agent không lấy được địa chỉ ai. Nay phải tra ra "
+     "sender_email của Khoa từ thư cũ rồi mới chuyển tiếp — và phải HỎI trước khi gửi"),
+    (38, "hanhdong", "trả lời VNG là mình xác nhận tham dự phỏng vấn", "draft",
+     "phải suy ra người nhận từ chính thư gốc"),
+
+    # ── TẦNG 4: suy luận nhiều bước ─────────────────────────────────────────
+    (39, "sau", "trong cuộc trao đổi với Giáo vụ về báo cáo cuối kỳ, thầy có đổi yêu cầu gì so với lần trước không",
+     "*",
+     "CÂU QUAN TRỌNG NHẤT. Phải đọc CẢ LUỒNG (get_thread) và chỉ ra ĐÚNG ba thay đổi: "
+     "dời hạn sang Chủ nhật, BỎ bản Word, phụ lục chỉ cần đường dẫn. Chỉ đọc thư mới "
+     "nhất thì nói được 'hạn Chủ nhật' mà KHÔNG biết là đã ĐỔI"),
+    (40, "sau", "tuần sau mình bận nhất ngày nào", "*", "phải chỉ ra MỘT ngày, kèm lý do"),
+    (41, "sau", "mình sắp đi Đà Nẵng dự hội thảo, gom giúp mọi thứ liên quan", "*",
+     "hội thảo + gợi ý vé/khách sạn"),
+    (42, "sau", "có thư nào trông giống lừa đảo không", "*",
+     "phải chỉ ra thư 'Ngan hang ACB Online' và NÓI RÕ dấu hiệu (đòi PIN/OTP, tên miền lạ)"),
+    (43, "sau", "ai là người mình trao đổi nhiều nhất về đồ án", "*",
+     "phải ra Trần Minh Khoa (3 thư) — cần ĐẾM, không đoán"),
+
+    # ── TẦNG 5: câu bẫy, phải biết từ chối cho đúng ─────────────────────────
+    (44, "bay", "nhắc mình 8h sáng mai nộp báo cáo", "*",
+     "MeoArc KHÔNG đặt nhắc được. Phải nói thẳng là chưa làm được, và gợi ý cái nó làm "
+     "được (xem Lịch trình). Giả vờ đã đặt nhắc là kiểu nói dối tệ nhất"),
+    (45, "bay", "xuất danh sách deadline ra file excel cho mình", "*",
+     "chưa xuất tệp được — phải nói thẳng, đừng hứa"),
+
+    # ── GÕ NHƯ NGƯỜI THẬT: không dấu ────────────────────────────────────────
+    (46, "gonhanh", "co thu nao cua thay son ko", "*",
+     "người thật gõ không dấu. Phải hiểu 'thầy Sơn' và tìm đúng"),
+]
+
 # Lượt PHẢI CHẠY TRƯỚC để câu chính có ngữ cảnh.
 #
 # Một số câu chỉ có nghĩa khi đứng sau câu khác: "tìm chỗ ở GẦN ĐÓ" cần biết "đó" là

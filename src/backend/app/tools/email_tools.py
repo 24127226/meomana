@@ -25,6 +25,7 @@ from app.tools.schemas import (
     SendEmailInput, SendEmailOutput,
     ReplyEmailInput, ReplyEmailOutput,
     ForwardEmailInput, ForwardEmailOutput,
+    GetThreadInput, GetThreadOutput,
     ApplyLabelsInput, ApplyLabelsOutput,
     BulkActionInput, BulkActionOutput, BulkAction,
     ListLabelsInput, ListLabelsOutput,
@@ -79,6 +80,7 @@ def _to_summary(e: Email) -> EmailSummary:
         id=e.id,
         thread_id=e.threadId or e.id,         # luồng THẬT từ Gmail; thiếu thì lùi về id
         sender=e.sender,
+        sender_email=e.senderEmail or "",
         subject=e.subject,
         recipient=[e.to] if e.to else [],
         date=_parse_dt(e.date),
@@ -199,11 +201,46 @@ async def get_email(inp: GetEmailInput, ctx: RequestContext) -> GetEmailOutput:
     """Lấy NỘI DUNG ĐẦY ĐỦ một email (thân thư + đính kèm) để đọc, tóm tắt hoặc trả lời."""
     e = await asyncio.to_thread(mail.get_message, ctx.email_provider, ctx.access_token, inp.email_id)
     detail = EmailDetail(
+        # Người gửi/người nhận đi KÈM nội dung. Thiếu thì agent đọc xong cả lá thư mà
+        # vẫn không biết nó của ai — và mọi việc "trả lời"/"chuyển tiếp" đều bế tắc.
+        sender=e.sender,
+        sender_email=e.senderEmail or "",
+        to=e.to or "",
+        subject=e.subject,
         body_text="\n\n".join(e.body),
         attachments=[a.name for a in (e.attachments or [])],
         cc=[], bcc=[],
     )
     return GetEmailOutput(success=True, message="Đã lấy nội dung thư.", data=detail)
+
+
+@tool_registry.register(category=ToolCategory.READ, input_schema=GetThreadInput)
+async def get_thread(inp: GetThreadInput, ctx: RequestContext) -> GetThreadOutput:
+    """Đọc CẢ cuộc trao đổi chứa thư này (mọi lượt, cũ → mới).
+
+    Dùng khi người dùng hỏi về một CUỘC TRAO ĐỔI chứ không phải một lá thư: "thầy có
+    đổi yêu cầu gì so với lần trước không", "tóm tắt cả cuộc trao đổi này", "mình đã
+    trả lời chưa". Đọc mỗi thư mới nhất thì câu trả lời sẽ thiếu đúng phần bối cảnh
+    khiến câu hỏi được đặt ra.
+    """
+    goc = await asyncio.to_thread(mail.get_message, ctx.email_provider, ctx.access_token,
+                                  inp.email_id)
+    tid = getattr(goc, "threadId", None)
+    if not tid:
+        ds = [goc]                      # thư lẻ: chính nó là cả luồng
+    else:
+        try:
+            ds = await asyncio.to_thread(mail.get_thread, ctx.email_provider,
+                                         ctx.access_token, tid) or [goc]
+        except Exception:
+            # Khâu luồng hỏng không được che mất lá thư đang hỏi.
+            ds = [goc]
+    items = [_to_summary(e) for e in ds]
+    return GetThreadOutput(
+        success=True,
+        message=f"Cuộc trao đổi này có {len(items)} thư.",
+        data=items, total_found=len(items),
+    )
 
 
 @tool_registry.register(category=ToolCategory.READ, input_schema=ListLabelsInput)

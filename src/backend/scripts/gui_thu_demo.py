@@ -628,6 +628,15 @@ def main() -> int:
                     help="Gửi RIÊNG 22 thư mới phủ đủ 8 nhãn, để thấy rõ phân loại "
                          "chạy đúng. KHÔNG trùng với bộ --quay-demo đã gửi trước đó, "
                          "nên cộng thêm được vào hộp thư sẵn có.")
+    ap.add_argument("--chi-luong", action="store_true",
+                    help="CHỈ gửi cuộc trao đổi ba lượt, bỏ qua 11 thư nền. Dùng khi bộ "
+                         "nền đã ở trong hộp thư rồi mà cần dựng lại riêng luồng.")
+    ap.add_argument("--bo-prompt", action="store_true",
+                    help="Gửi bộ thư dựng NGƯỢC TỪ CÂU HỎI (11 thư nền) KÈM một cuộc "
+                         "trao đổi ba lượt với Giáo vụ, trong đó yêu cầu bị ĐỔI ở lượt "
+                         "cuối. Luồng thật là thứ mọi bộ trước đây thiếu — không có nó "
+                         "thì câu 'thầy có đổi yêu cầu gì so với lần trước không' không "
+                         "kiểm được.")
     args = ap.parse_args()
 
     db = SessionLocal()
@@ -689,7 +698,16 @@ def main() -> int:
         if bo_qua:
             print(f"(Bỏ qua {len(bo_qua)} tài khoản không dùng được: {', '.join(bo_qua)})\n")
 
-        if args.phan_loai:
+        if args.chi_luong:
+            bo = []
+            thanh_phan = ["chỉ luồng hội thoại"]
+        elif args.bo_prompt:
+            # BỘ DỰNG NGƯỢC TỪ CÂU HỎI. Các bộ khác gieo thư cho đủ tính năng; bộ này
+            # gieo đúng những lá khiến câu người dùng thật sự hỏi có câu trả lời.
+            from bo_quay_demo import bo_prompt as _bo_pr
+            bo = list(_bo_pr())
+            thanh_phan = [f"{len(bo)} thư theo câu hỏi"]
+        elif args.phan_loai:
             # RIÊNG, không trộn: bộ này để soi PHÂN LOẠI, và 46 thư kia đã ở trong
             # hộp thư rồi — gửi lại là hàng đôi, mà hàng đôi thì mọi con số đếm được
             # (chưa đọc, số việc) đều sai theo một cách rất khó nhận ra.
@@ -756,6 +774,36 @@ def main() -> int:
             # thì thành hàng đôi mà bỏ dở thì demo thiếu.
             if i < len(bo):
                 time.sleep(0.4)
+
+        # ── LUỒNG HỘI THOẠI THẬT ────────────────────────────────────────────
+        # Gửi thư đầu như bình thường, rồi TRẢ LỜI vào chính nó hai lần. `reply_email`
+        # gắn In-Reply-To/References + threadId nên Gmail gom đúng MỘT luồng.
+        #
+        # Không làm được bằng cách gửi ba thư rời cùng tiêu đề: giao diện Gmail gom
+        # theo tiêu đề, nhưng `threadId` vẫn là ba luồng khác nhau — mà MeoArc đọc
+        # threadId. Ba thư rời thì tính năng xem hội thoại không có gì để hiện.
+        if args.bo_prompt or args.chi_luong:
+            from bo_quay_demo import luong_giao_vu as _luong
+            cac_luot = _luong()
+            print("\n── Cuộc trao đổi ba lượt (Giáo vụ ĐỔI yêu cầu ở lượt cuối) ──")
+            try:
+                nguoi_gui, tieu_de, than = cac_luot[0]
+                dau = gmail_send.send_email(
+                    token, to=nguoi_nhan, subject=tieu_de, body=than,
+                    from_addr=f'"{nguoi_gui}" <{user.email}>',
+                )
+                mid = dau.get("id", "")
+                print(f"  [1/3] đã gửi: {nguoi_gui} │ {tieu_de}")
+                for k, (ng, _td, th) in enumerate(cac_luot[1:], start=2):
+                    time.sleep(1.0)      # Gmail cần một nhịp để thư trước có mặt
+                    tra = gmail_send.reply_email(
+                        token, mid, th, from_addr=f'"{ng}" <{user.email}>',
+                    )
+                    mid = tra.get("id", mid)   # trả lời vào lượt MỚI NHẤT → chuỗi nối dài
+                    print(f"  [{k}/3] đã trả lời trong luồng: {ng}")
+                xong += 3
+            except Exception as exc:
+                print(f"  LỖI khi dựng luồng: {exc}")
 
         print(f"\nĐã gửi {xong}/{len(bo)} thư.")
         print("Mở MeoArc, bấm nút làm mới ở khung Thư, rồi vào Lịch trình để xem.")

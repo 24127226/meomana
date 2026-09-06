@@ -61,6 +61,11 @@ class EmailSummary(BaseModel):
     id: str
     thread_id: str
     sender: str
+    # ĐỊA CHỈ, không chỉ tên hiển thị. Thiếu nó thì agent KHÔNG CÓ CÁCH NÀO biết địa chỉ
+    # của ai: "chuyển tiếp cho thầy Sơn", "gửi thư cho bạn Khoa" đều bế tắc, vì tên hiển
+    # thị không gửi thư được. Người dùng thật hiếm khi gõ nguyên địa chỉ email vào câu
+    # lệnh — họ gọi tên người.
+    sender_email: str = ""
     subject: str
     recipient: list[str]
     date: datetime
@@ -75,6 +80,13 @@ class EmailDetail(BaseModel):
     """Full Email
     - Dùng khi agent cần đọc nội dung để summarize hoặc reply
     """
+    # Người gửi/người nhận: cần cho mọi việc "trả lời", "chuyển tiếp", "gửi cho người
+    # đã nhắn mình". Trước đây chi tiết thư KHÔNG mang thông tin này, nên agent đọc
+    # xong nội dung mà vẫn không biết nó của ai.
+    sender: str = ""
+    sender_email: str = ""
+    to: str = ""
+    subject: str = ""
     body_text: str
     body_html: str | None = None
     attachments: list[str] = []
@@ -430,6 +442,26 @@ class ForwardEmailInput(BaseModel):
     )] = ""
 
     _go_thoat_note = field_validator("note", mode="before")(sua_xuong_dong)
+
+
+class GetThreadInput(BaseModel):
+    """Đọc CẢ cuộc trao đổi, không chỉ một lá thư.
+
+    Người dùng hỏi "thầy có đổi yêu cầu gì so với lần trước không", "tóm tắt cả cuộc
+    trao đổi này" — không đọc được các lượt trước thì không trả lời nổi. Giao diện đã
+    xem được luồng từ hôm qua, nhưng agent thì chưa: tính năng dựng cho MẮT NGƯỜI mà
+    quên phần cho AI.
+    """
+
+    email_id: Annotated[str, Field(
+        description="ID of any email in the thread. Returns every message in that "
+                    "conversation, oldest first.",
+    )]
+
+
+class GetThreadOutput(ToolResult):
+    data: list[EmailSummary] | None = None
+    total_found: int = 0
 
 
 class ForwardEmailOutput(ToolResult):

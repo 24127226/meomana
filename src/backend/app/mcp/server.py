@@ -284,6 +284,14 @@ categorize_emails.__doc__ = (
 )
 
 
+async def get_thread(email_id: str) -> dict:
+    """Đọc CẢ cuộc trao đổi chứa thư này (mọi lượt, cũ → mới), không chỉ một lá.
+    Dùng khi câu hỏi nói về một CUỘC TRAO ĐỔI: "thầy có đổi yêu cầu gì so với lần trước
+    không", "tóm tắt cả cuộc trao đổi này", "mình đã trả lời chưa". Đọc mỗi thư mới
+    nhất thì thiếu đúng phần bối cảnh khiến câu hỏi được đặt ra."""
+    return await _call("get_thread", {"email_id": email_id})
+
+
 async def get_email(email_id: str) -> dict:
     """Lấy nội dung ĐẦY ĐỦ (thân thư + tên tệp đính kèm) của 1 email theo id (lấy id từ search_emails)."""
     return await _call("get_email", {"email_id": email_id})
@@ -447,7 +455,7 @@ async def tim_khach_san(thanh_pho: str, nhan_phong: str, tra_phong: str,
 # nhận + cổng tiền. Cổng đó gắn với phiên người dùng trên web; phơi qua stdio là mở
 # đường vòng qua chính lớp bảo vệ đó. Đặt chỗ vẫn phải bấm duyệt trên web.
 for _fn in (search_emails, semantic_search, categorize_emails, get_email, list_labels,
-            send_email, reply_email, forward_email, apply_labels, bulk_action,
+            get_thread, send_email, reply_email, forward_email, apply_labels, bulk_action,
             liet_ke_cam_ket, ap_luc_lich_trinh, de_xuat_di_lai,
             tim_chuyen_bay, tim_khach_san):
     mcp.tool()(_fn)

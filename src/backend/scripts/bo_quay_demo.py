@@ -456,3 +456,197 @@ def bo_thu(moc: datetime | None = None) -> list[tuple[str, str, str]]:
             "Thầy Sơn",
         ),
     ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BỘ THEO CÂU HỎI THẬT — dựng NGƯỢC từ prompt, không phải từ code
+# ══════════════════════════════════════════════════════════════════════════════
+# Các bộ trên dựng từ tính năng đang có: "app phân loại được 8 nhãn nên gieo thư cho
+# đủ 8 nhãn". Cách đó cho một hộp thư đẹp mà rỗng nghĩa — nó chứng minh app chạy đúng
+# thứ app đã làm, chứ không chứng minh nó trả lời được câu người ta thật sự hỏi.
+#
+# Bộ này đi ngược lại: viết câu hỏi của một sinh viên năm hai sắp bảo vệ TRƯỚC, rồi
+# mới gieo đúng những lá thư khiến câu hỏi đó có câu trả lời. Vài lá cố ý mâu thuẫn
+# nhau, vì đời thật là vậy — và một trợ lý chỉ giỏi khi dữ liệu sạch thì không giúp
+# được ai.
+
+
+def luong_giao_vu(moc: datetime | None = None) -> list[tuple[str, str, str]]:
+    """MỘT cuộc trao đổi ba lượt, trong đó yêu cầu BỊ ĐỔI ở lượt cuối.
+
+    Trả [(tên người gửi, tiêu đề, thân thư)] — lượt đầu gửi mới, hai lượt sau TRẢ LỜI
+    vào đúng luồng đó (xem `gui_thu_demo.py --bo-prompt`).
+
+    Đây là thứ mọi bộ thư trước đây thiếu: chúng chỉ có thư RỜI. Mà câu đáng giá nhất
+    của một trợ lý thư lại là câu về một CHUỖI — "thầy có đổi yêu cầu gì so với lần
+    trước không". Không có luồng thật thì câu đó không kiểm được, và tính năng xem hội
+    thoại chỉ là một cái khung rỗng.
+    """
+    m = moc or datetime.now()
+    t6 = (m + timedelta(days=2)).strftime("%d/%m")
+    cn = (m + timedelta(days=4)).strftime("%d/%m")
+    return [
+        (
+            "Phòng Giáo vụ FIT",
+            "Nhắc nộp báo cáo cuối kỳ môn Nhập môn Công nghệ phần mềm",
+            "Chào các em,\n\n"
+            f"Phòng Giáo vụ nhắc các nhóm nộp BÁO CÁO CUỐI KỲ trước 23:59 thứ Sáu {t6}.\n\n"
+            "Bản nộp gồm HAI tệp: bản PDF và bản Word. Đặt tên theo mẫu "
+            "NhomXX_BaoCao_CuoiKy.\n\n"
+            "Nhóm nào nộp trễ sẽ bị trừ 20% điểm báo cáo.\n\n"
+            "Trân trọng,\nPhòng Giáo vụ — Khoa CNTT",
+        ),
+        (
+            "Anh Quân",
+            "Re: Nhắc nộp báo cáo cuối kỳ môn Nhập môn Công nghệ phần mềm",
+            "Dạ em chào thầy/cô,\n\n"
+            "Em là Phạm Trần Anh Quân, nhóm trưởng Nhóm 7 (MSSV 24127226). Em xin xác "
+            "nhận nhóm em sẽ nộp đúng hạn ạ.\n\n"
+            "Cho em hỏi thêm: phần phụ lục mã nguồn có cần in vào báo cáo không, hay chỉ "
+            "cần để đường dẫn kho mã ạ?\n\n"
+            "Em cảm ơn thầy/cô.",
+        ),
+        (
+            "Phòng Giáo vụ FIT",
+            "Re: Nhắc nộp báo cáo cuối kỳ môn Nhập môn Công nghệ phần mềm",
+            "Chào em,\n\n"
+            "CẬP NHẬT QUAN TRỌNG, các em đọc kỹ vì có thay đổi so với thông báo trước:\n\n"
+            f"1. Hạn nộp DỜI sang 23:59 CHỦ NHẬT {cn} — muộn hơn hai ngày so với thông "
+            "báo cũ.\n"
+            "2. KHÔNG cần nộp bản Word nữa, chỉ nộp DUY NHẤT bản PDF.\n"
+            "3. Phụ lục mã nguồn: chỉ cần để đường dẫn kho mã, không in vào báo cáo.\n\n"
+            "Các em cập nhật lại cho cả nhóm nhé.\n\n"
+            "Trân trọng,\nPhòng Giáo vụ — Khoa CNTT",
+        ),
+    ]
+
+
+def bo_prompt(moc: datetime | None = None) -> list[tuple[str, str, str]]:
+    """Thư nền cho bộ câu hỏi tầng 1–5. Mỗi lá phục vụ ít nhất một câu cụ thể."""
+    m = moc or datetime.now()
+
+    def ngay(d: int) -> str:
+        return (m + timedelta(days=d)).strftime("%d/%m")
+
+    return [
+        # "học phí kỳ này đóng chưa, hạn nào" — số tiền và hạn phải RÕ, để trả lời được
+        # thì phải ĐỌC đúng thư này chứ không đoán.
+        (
+            "Phòng Kế hoạch Tài chính",
+            "Thông báo đóng học phí học kỳ 1 năm học 2026-2027",
+            "Kính gửi sinh viên,\n\n"
+            "Nhà trường thông báo mức học phí học kỳ 1 và thời hạn đóng như sau:\n\n"
+            "- Sinh viên khoá 2024, ngành Công nghệ thông tin: 8.750.000 đồng\n"
+            f"- Hạn đóng: trước 17:00 ngày {ngay(9)}\n"
+            "- Hình thức: chuyển khoản qua cổng thanh toán của trường, nội dung ghi "
+            "MSSV_HoTen\n\n"
+            "Sinh viên quá hạn sẽ bị khoá tài khoản đăng ký học phần học kỳ sau.\n\n"
+            "Phòng Kế hoạch Tài chính",
+        ),
+        # "có ai hẹn phỏng vấn không, ngày mấy"
+        (
+            "Tuyển dụng VNG",
+            "Thư mời phỏng vấn vị trí Backend Intern — vòng 1",
+            "Chào bạn Phạm Trần Anh Quân,\n\n"
+            "Cảm ơn bạn đã ứng tuyển vị trí Backend Intern tại VNG. Chúng tôi mời bạn "
+            "tham dự phỏng vấn vòng 1:\n\n"
+            f"- Thời gian: 14:00 ngày {ngay(3)}\n"
+            "- Hình thức: trực tuyến qua Google Meet, đường dẫn gửi trước 30 phút\n"
+            "- Nội dung: hỏi về dự án cá nhân và kiến thức nền tảng\n\n"
+            f"Bạn vui lòng xác nhận tham dự bằng cách trả lời thư này trước 17:00 ngày "
+            f"{ngay(1)}.\n\n"
+            "Trân trọng,\nBộ phận Tuyển dụng — VNG",
+        ),
+        # "mình sắp đi Đà Nẵng dự hội thảo — gom giúp vé, khách sạn, lịch"
+        (
+            "Ban tổ chức Hội thảo SE 2026",
+            "Xác nhận tham dự Hội thảo Công nghệ phần mềm 2026 — Đà Nẵng",
+            "Chào bạn,\n\n"
+            "Ban tổ chức xác nhận bạn có tên trong danh sách tham dự Hội thảo Công nghệ "
+            "phần mềm 2026.\n\n"
+            f"- Thời gian: hai ngày {ngay(19)} và {ngay(20)}\n"
+            "- Địa điểm: Đại học Bách khoa Đà Nẵng, 54 Nguyễn Lương Bằng\n"
+            "- Bạn tự lo phương tiện và chỗ ở; ban tổ chức hỗ trợ 500.000đ chi phí đi lại\n\n"
+            "Vui lòng có mặt trước 8:00 ngày đầu tiên để nhận thẻ.\n\n"
+            "Ban tổ chức",
+        ),
+        # "có thư nào trông giống lừa đảo không" — dựng đúng các dấu hiệu kinh điển:
+        # gấp gáp, doạ khoá tài khoản, tên miền lạ, đòi PIN và OTP.
+        (
+            "Ngan hang ACB Online",
+            "KHAN: Tai khoan cua ban se bi khoa trong 24h",
+            "Kinh gui Quy khach,\n\n"
+            "He thong ghi nhan giao dich bat thuong tren tai khoan cua Quy khach. De "
+            "tranh bi KHOA VINH VIEN trong 24 gio toi, Quy khach vui long xac thuc lai "
+            "thong tin ngay:\n\n"
+            "http://acb-verify-online.secure-login-vn.com/xacthuc\n\n"
+            "Quy khach can cung cap: so the, ma PIN va ma OTP de he thong doi chieu.\n\n"
+            "Tran trong,\nBo phan An ninh ACB",
+        ),
+        # "ai là người mình trao đổi nhiều nhất về đồ án" — ba lá cùng một người.
+        (
+            "Trần Minh Khoa",
+            "Phần backend nhóm 7 — mình push nhánh feat/mcp rồi nhé",
+            "Ê Quân,\n\n"
+            "Mình vừa push nhánh feat/mcp lên rồi, bạn kéo về xem giúp phần đăng ký tool "
+            "nhé. Mình có tách riêng phần xác thực ra file khác cho dễ đọc.\n\n"
+            "Còn phần tài liệu kiến trúc thì mình chưa đụng, bạn với Mai chia nhau nha.\n\n"
+            "Khoa",
+        ),
+        (
+            "Trần Minh Khoa",
+            "Vướng chỗ phân trang khi gọi Gmail",
+            "Quân ơi,\n\n"
+            "Mình vướng chỗ phân trang khi gọi Gmail: lấy quá 30 thư một lần là chậm hẳn. "
+            "Bạn xem giúp mình có nên cache lại không, hay cứ để gọi thẳng?\n\n"
+            "Tối nay mình rảnh từ 8h, gọi bàn nhanh được không?\n\n"
+            "Khoa",
+        ),
+        (
+            "Trần Minh Khoa",
+            "Slide bảo vệ — mình làm xong phần kiến trúc rồi",
+            "Quân,\n\n"
+            "Mình làm xong 6 slide phần kiến trúc, để trong Drive chung. Bạn xem rồi góp "
+            "ý giúp mình trước tối mai nhé, để còn kịp sửa.\n\n"
+            "Phần demo thì bạn chạy hay mình chạy? Mình nghĩ bạn chạy sẽ hợp hơn vì bạn "
+            "nắm phần giao diện.\n\n"
+            "Khoa",
+        ),
+        (
+            "Lê Thị Mai",
+            "Mình gửi phần kiểm thử nhóm 7",
+            "Chào Quân,\n\n"
+            "Mình viết xong phần kiểm thử cho ba use case chính rồi. Độ phủ hiện tại "
+            "khoảng 68%, mình đang bổ sung thêm cho nhánh xử lý lỗi.\n\n"
+            "Bạn nhắc Khoa gửi mình phần backend cuối cùng để mình kiểm nốt nhé.\n\n"
+            "Mai",
+        ),
+        # "sáng nay có gì gấp không" — một việc GẤP THẬT, hạn ngay trong ngày.
+        (
+            "Phòng Công tác Sinh viên",
+            "Hạn chót hôm nay: đăng ký xét học bổng học kỳ 1",
+            "Chào các em,\n\n"
+            "Hôm nay là ngày cuối nhận hồ sơ xét học bổng khuyến khích học tập học kỳ 1. "
+            "Hạn nộp: 17:00 hôm nay, nộp trực tiếp tại phòng A11 hoặc qua cổng sinh viên.\n\n"
+            "Hồ sơ gồm: đơn đăng ký, bảng điểm học kỳ trước, giấy xác nhận hoạt động.\n\n"
+            "Sau 17:00 hệ thống đóng, không nhận bổ sung.\n\n"
+            "Phòng Công tác Sinh viên",
+        ),
+        # Thư đời thường — để câu "có gì gấp không" phải biết LOẠI TRỪ, chứ không liệt kê hết.
+        (
+            "Mẹ",
+            "Con nhớ ăn uống đầy đủ nhé",
+            "Con ơi,\n\n"
+            "Mẹ chuyển cho con tiền sinh hoạt tháng này rồi nhé, con kiểm tra tài khoản "
+            "xem đã nhận chưa.\n\n"
+            "Con nhớ ăn sáng đầy đủ, đừng thức khuya quá. Cuối tuần rảnh thì gọi về cho "
+            "mẹ.\n\n"
+            "Mẹ",
+        ),
+        (
+            "Phạm Thu Trang",
+            "Chiều nay đi cà phê không",
+            "Quân ơi rảnh chiều nay không, đi cà phê chỗ cũ đi. Mình có chuyện muốn kể.\n\n"
+            "Trang",
+        ),
+    ]
