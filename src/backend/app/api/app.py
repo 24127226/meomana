@@ -45,6 +45,7 @@ from app.core import errors  # thu thập lỗi: Sentry khi có DSN, không thì
 from app.core.kv import kv   # kho key-value dùng chung (Redis khi có, không thì in-memory)
 import logging
 import re
+from uuid import uuid4
 
 # File này vốn không có `logger` cấp module — mỗi chỗ tự gọi logging.getLogger(...) tại
 # chỗ. Nhưng nhánh lỗi của "Làm mới" (đồng bộ nhanh thất bại) lại gọi thẳng `logger`,
@@ -2318,8 +2319,12 @@ async def agent_chat(
         # _compact_tools: cắt bớt JSON email thô trước khi cất → NFR-Memory (đỡ phình token lượt sau).
         agent_dump = messages_to_dict(_compact_tools(_trim_history(result["messages"])))
         display = list(conv.display_messages or [])
-        display.append({"role": "user", "text": message})
-        display.append({"role": "agent", "reply": out})
+        # MÃ RIÊNG cho từng tin nhắn. Không có mã thì giao diện chỉ định vị được bằng
+        # VỊ TRÍ trong mảng, mà vị trí lệch ngay: giao diện còn tự chèn thêm thẻ "đã
+        # xong" sau mỗi lần duyệt, những thẻ đó KHÔNG được lưu xuống. Đánh dấu nhầm
+        # tin nhắn ở đây nghĩa là một thẻ xoá đã duyệt vẫn hiện nút duyệt.
+        display.append({"id": uuid4().hex, "role": "user", "text": message})
+        display.append({"id": uuid4().hex, "role": "agent", "reply": out})
         conversation_repo.save_turn(db, conv, agent_dump, display, first_user_text=message)
 
         # Trả AgentReply kèm conversationId để FE biết phiên nào (nhất là khi phiên VỪA tạo).
@@ -2455,11 +2460,46 @@ def get_conversation(
     c = conversation_repo.get_owned(db, conv_id, session.user_id)
     if c is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại.")
+    # Phiên CŨ chưa có mã tin nhắn (lưu trước khi thêm `id`) → cấp mã ngay lúc mở, một
+    # lần, rồi ghi lại. Không làm thì các phiên cũ vĩnh viễn không đánh dấu duyệt được,
+    # và người dùng gặp đúng lỗi cũ ở đúng những phiên họ hay mở lại nhất.
+    ds = list(c.display_messages or [])
+    thieu_ma = [m for m in ds if isinstance(m, dict) and not m.get("id")]
+    if thieu_ma:
+        for m in thieu_ma:
+            m["id"] = uuid4().hex
+        conversation_repo.set_display_messages(db, c, ds)
     return ConversationDetail(
         id=c.id, title=c.title, pinned=c.pinned,
         createdAt=c.created_at, updatedAt=c.updated_at,
-        messages=c.display_messages or [],
+        messages=ds,
     )
+
+
+@app.post("/agent/conversations/{conv_id}/messages/{msg_id}/resolved")
+def danh_dau_da_duyet(conv_id: str, msg_id: str,
+                      session: AuthSession = Depends(get_current_session),
+                      db: Session = Depends(get_db)):
+    """Đánh dấu MỘT thẻ duyệt là ĐÃ XỬ LÝ, và ghi xuống CSDL.
+
+    ── VÌ SAO PHẢI LƯU, KHÔNG ĐỂ Ở GIAO DIỆN ──
+    Trạng thái "đã duyệt" trước đây chỉ sống trong bộ nhớ trình duyệt. Mở lại hội thoại
+    là mọi thẻ quay về CHỜ DUYỆT — kể cả thẻ xoá thư đã chạy xong. Người dùng thấy nút
+    "Duyệt" còn đó thì bấm lại, và lệnh chạy LẦN HAI.
+
+    Ở đây chỉ ghi trạng thái hiển thị; nó KHÔNG phải cổng chặn thực thi. Cổng thật nằm
+    ở tầng tool (`_needs_confirm`) và ở bảng `confirmation_requests`.
+    """
+    c = conversation_repo.get_owned(db, conv_id, session.user_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại.")
+    ds = list(c.display_messages or [])
+    for m in ds:
+        if isinstance(m, dict) and m.get("id") == msg_id:
+            m["resolved"] = True
+            conversation_repo.set_display_messages(db, c, ds)
+            return {"ok": True}
+    raise HTTPException(status_code=404, detail="Không tìm thấy tin nhắn đó trong phiên.")
 
 
 @app.patch("/agent/conversations/{conv_id}", response_model=ConversationSummary)

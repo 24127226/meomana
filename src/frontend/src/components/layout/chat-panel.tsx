@@ -206,9 +206,13 @@ function goiYTiepTheo(reply: AgentReply): ChipGoiY[] {
 
 /** Khuôn tin BE (StoredMessage) → Message của FE (thêm id cục bộ để React render). */
 function toLocalMsg(m: StoredMessage): Message {
+  // DÙNG LẠI mã của máy chủ, không sinh mã mới. Sinh mới thì sau khi tải lại, mã cục
+  // bộ không còn khớp với gì cả và không đánh dấu duyệt lên máy chủ được nữa.
+  // `resolved` phải mang theo: thiếu nó thì mở lại hội thoại là mọi thẻ quay về CHỜ
+  // DUYỆT, kể cả thẻ xoá đã chạy xong — và người dùng bấm duyệt lần hai.
   return m.role === 'user'
-    ? { id: uid(), role: 'user', text: m.text }
-    : { id: uid(), role: 'agent', reply: m.reply }
+    ? { id: m.id || uid(), role: 'user', text: m.text }
+    : { id: m.id || uid(), role: 'agent', reply: m.reply, resolved: m.resolved }
 }
 
 /** ISO time (BE) → nhãn 'time' mà drawer hiểu (timeBucket đọc 'Hôm nay'/'Hôm qua'). */
@@ -1649,10 +1653,17 @@ export function ChatPanel({
     return () => window.clearTimeout(t)
   }, [focusSignal])
 
-  const markResolved = (id: string) =>
+  const markResolved = (id: string) => {
     updateMessages((prev) =>
       prev.map((m) => (m.id === id && m.role === 'agent' ? { ...m, resolved: true } : m)),
     )
+    // GHI XUỐNG MÁY CHỦ. Chỉ đổi ở bộ nhớ trình duyệt thì tải lại trang là mất, và thẻ
+    // xoá đã duyệt lại mọc ra nút "Duyệt". Lỗi im lặng: hỏng thì thẻ vẫn đúng trong
+    // phiên đang mở, chỉ mất sau khi tải lại — không đáng làm phiền người dùng giữa
+    // lúc họ vừa duyệt xong một việc.
+    const bid = sessions.find((s) => s.id === currentId)?.backendId
+    if (apiBaseUrlDaCauHinh && bid) api.resolveMessage(bid, id).catch(() => {})
+  }
 
   const execOp = (op: PlanOp) => {
     if (op.type === 'archive' || op.type === 'delete') actions.removeEmails(op.ids, op.type)

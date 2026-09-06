@@ -103,6 +103,9 @@ const EMAILS_GOC: Email[] = [
     category: 'moss',
     label: 'Học tập',
     folder: 'sent',
+    // Tệp nằm ở LƯỢT THỨ HAI của cuộc trao đổi — đúng chỗ người ta hay đính kèm nhất,
+    // và đúng chỗ bản đầu KHÔNG vẽ gì cả.
+    attachments: [{ name: 'Nhom07_SRS_v1_draft.pdf', size: '1.2 MB' }],
   },
   {
     id: '1c',

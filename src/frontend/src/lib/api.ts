@@ -58,8 +58,8 @@ export type AgentReplyWithId = AgentReply & { conversationId?: string }
 
 /** 1 tin trong lịch sử đã lưu (khuôn BE: user text HOẶC thẻ agent). */
 export type StoredMessage =
-  | { role: 'user'; text: string }
-  | { role: 'agent'; reply: AgentReply }
+  | { id?: string; role: 'user'; text: string; resolved?: boolean }
+  | { id?: string; role: 'agent'; reply: AgentReply; resolved?: boolean }
 
 /** 1 dòng ở drawer lịch sử (danh sách, không kèm toàn bộ tin nhắn). */
 export type ConversationSummary = {
@@ -151,6 +151,9 @@ export interface MeoArcApi {
 
   // Đọc & tìm — UC003/004/005
   listEmails(query?: EmailQuery): Promise<EmailListResult>
+  /** Đánh dấu MỘT thẻ duyệt là đã xử lý, và ghi xuống máy chủ.
+   *  Không lưu thì mở lại hội thoại là thẻ quay về "chờ duyệt" — kể cả thẻ xoá đã chạy. */
+  resolveMessage(convId: string, msgId: string): Promise<void>
   getEmail(id: string): Promise<Email | null>
   /** MỌI thư trong luồng của thư này, sắp CŨ → MỚI (UC004 — xem cả cuộc trao đổi). */
   getThread(id: string): Promise<Email[]>
@@ -393,6 +396,7 @@ export function createMockApi(): MeoArcApi {
       await delay(120)
       return filterEmails(seedEmails, query)
     },
+    async resolveMessage() {},
     async getEmail(id) {
       return seedEmails.find((e) => e.id === id) ?? null
     },
@@ -581,6 +585,8 @@ export function createHttpApi(baseUrl: string): MeoArcApi {
     revokeAccess: () => post<void>('/auth/revoke'),
 
     listEmails: (query = {}) => req<EmailListResult>(`/emails${qs(query)}`),
+    resolveMessage: (convId, msgId) =>
+      post<void>(`/agent/conversations/${convId}/messages/${msgId}/resolved`, {}),
     getEmail: (id) => req<Email | null>(`/emails/${id}`),
     getThread: (id) =>
       req<{ items: Email[] }>(`/emails/${id}/thread`).then((r) => r?.items ?? []),

@@ -439,6 +439,16 @@ export function EmailDetail({
                         {cleanParagraphs(m.body).map((p, i) => (
                           <p key={i} className="whitespace-pre-line">{renderRich(p)}</p>
                         ))}
+                        {/* Tệp của CÁC LƯỢT TRƯỚC. Bản đầu chỉ vẽ thân thư, nên một
+                            cuộc trao đổi mà tệp nằm ở lượt thứ hai thì mở ra không thấy
+                            đâu cả — đúng chỗ người ta hay để tệp nhất. */}
+                        {m.attachments && m.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {m.attachments.map((a) => (
+                              <TepDinhKem key={a.name} emailId={m.id} tep={a} nho />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -472,33 +482,7 @@ export function EmailDetail({
               </div>
               <div className="flex flex-wrap gap-2">
                 {email.attachments.map((a) => (
-                  <button
-                    key={a.name}
-                    onClick={() => {
-                      // Chế độ backend thật: mở URL tải đính kèm (cookie phiên tự đính kèm
-                      // → backend xác thực). Mock mode: chưa có tệp thật → bỏ qua.
-                      if (apiBaseUrlDaCauHinh)
-                        window.open(
-                          duongDanApi(`/emails/${id}/attachments/${encodeURIComponent(a.name)}`),
-                          '_blank',
-                        )
-                    }}
-                    className="group flex items-center gap-2.5 rounded-xl bg-popover px-3 py-2 text-left shadow-subtle transition-all hover:-translate-y-0.5 hover:shadow-soft"
-                  >
-                    <span
-                      className="flex size-8 items-center justify-center rounded-lg text-[10px] font-bold uppercase"
-                      style={{ backgroundColor: c.soft, color: c.ink }}
-                    >
-                      {a.name.split('.').pop()}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block max-w-[160px] truncate text-xs font-medium text-popover-foreground">
-                        {a.name}
-                      </span>
-                      <span className="block text-[11px] text-popover-foreground/60">{a.size}</span>
-                    </span>
-                    <Download className="size-4 text-popover-foreground/50 transition-colors group-hover:text-popover-foreground" />
-                  </button>
+                  <TepDinhKem key={a.name} emailId={id} tep={a} mau={c} />
                 ))}
               </div>
             </div>
@@ -843,6 +827,76 @@ function aiSummary(email: Email): string[] {
   // Không đoạn nào là câu thật (thư toàn HTML/mã) → dùng dòng xem trước, và nếu
   // dòng đó cũng là rác thì thà nói thẳng còn hơn hiện một dòng ký tự vô nghĩa.
   return laCauThat(email.preview) ? [email.preview] : [t('det.htmlNote')]
+}
+
+/** Một tệp đính kèm, bấm để tải.
+ *
+ *  Tách thành phần vì nó đã cần dùng ở HAI chỗ: thư đang mở, và các lượt trước trong
+ *  luồng hội thoại. Chép sang chỗ thứ hai là mở đường cho hai nút cùng tên mà hành vi
+ *  lệch nhau — đúng cái bẫy đã dính vài lần trong dự án này.
+ */
+function TepDinhKem({
+  emailId,
+  tep,
+  mau,
+  nho = false,
+}: {
+  emailId: string
+  tep: { name: string; size: string }
+  mau?: { soft: string; ink: string }
+  /** Bản gọn cho danh sách lượt trước — cùng hành vi, chỉ nhỏ hơn. */
+  nho?: boolean
+}) {
+  const duoi = tep.name.split('.').pop() || '?'
+  return (
+    <button
+      onClick={() => {
+        // Backend thật: mở URL tải (cookie phiên tự đính kèm → backend xác thực).
+        // `encodeURIComponent` là BẮT BUỘC: tên tệp thật hay có dấu cách và dấu chấm,
+        // không mã hoá thì đường dẫn vỡ và người dùng thấy "tải hỏng" không rõ vì sao.
+        // Mock mode: chưa có tệp thật → không làm gì.
+        if (apiBaseUrlDaCauHinh)
+          window.open(
+            duongDanApi(`/emails/${emailId}/attachments/${encodeURIComponent(tep.name)}`),
+            '_blank',
+          )
+      }}
+      title={`${tep.name} · ${tep.size}`}
+      className={cn(
+        'group flex items-center gap-2 rounded-xl bg-popover text-left shadow-subtle transition-all hover:-translate-y-0.5 hover:shadow-soft',
+        nho ? 'px-2 py-1.5' : 'gap-2.5 px-3 py-2',
+      )}
+    >
+      <span
+        className={cn(
+          'flex items-center justify-center rounded-lg font-bold uppercase',
+          nho ? 'size-6 text-[9px]' : 'size-8 text-[10px]',
+        )}
+        style={mau ? { backgroundColor: mau.soft, color: mau.ink } : undefined}
+      >
+        {duoi}
+      </span>
+      <span className="min-w-0">
+        <span
+          className={cn(
+            'block truncate font-medium text-popover-foreground',
+            nho ? 'max-w-[130px] text-[11px]' : 'max-w-[160px] text-xs',
+          )}
+        >
+          {tep.name}
+        </span>
+        {!nho && (
+          <span className="block text-[11px] text-popover-foreground/60">{tep.size}</span>
+        )}
+      </span>
+      <Download
+        className={cn(
+          'text-popover-foreground/50 transition-colors group-hover:text-popover-foreground',
+          nho ? 'size-3.5' : 'size-4',
+        )}
+      />
+    </button>
+  )
 }
 
 function ActionBtn({

@@ -5,6 +5,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from app.models.conversation import Conversation
 
 
@@ -79,6 +80,25 @@ def save_turn(
     conv.updated_at = _utcnow()
     if first_user_text and conv.title == "Cuộc trò chuyện mới":
         conv.title = _auto_title(first_user_text)
+    db.commit()
+    db.refresh(conv)
+    return conv
+
+
+def set_display_messages(db: Session, conv: Conversation, display_messages: list) -> Conversation:
+    """Ghi lại RIÊNG phần lịch sử hiển thị, KHÔNG đụng `agent_messages`.
+
+    Dùng khi chỉ đổi trạng thái hiển thị (đánh dấu một thẻ đã duyệt, cấp mã cho tin nhắn
+    cũ). Gọi `save_turn` cho việc này thì phải truyền cả `agent_messages` — và truyền
+    nhầm một lần là xoá sạch ngữ cảnh agent của cả phiên.
+
+    KHÔNG dời `updated_at`: đánh dấu một thẻ không phải một lượt trò chuyện mới, mà
+    danh sách phiên xếp theo mốc đó — dời thì phiên nhảy lên đầu vì một cú bấm nút.
+    """
+    conv.display_messages = display_messages
+    # SQLAlchemy không tự phát hiện thay đổi BÊN TRONG cột JSON (mutate tại chỗ), nên
+    # phải báo rõ. Thiếu dòng này thì commit đi qua trong im lặng và không ghi được gì.
+    flag_modified(conv, "display_messages")
     db.commit()
     db.refresh(conv)
     return conv
