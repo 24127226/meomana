@@ -12,7 +12,14 @@ import { emails as seedEmails } from '@/data/emails'
 import { CommitmentsView } from '@/components/layout/commitments-view'
 import { cn } from '@/lib/utils'
 import { AlertOverlay } from '@/components/layout/alert-overlay'
-import { apDungSuaLacQuan, ghimLenDau, nenNapNgam, THU_MUC_DICH, type EmailActions } from '@/lib/email-actions'
+import {
+  apDungSuaLacQuan,
+  ghimLenDau,
+  giuChiTietDaCo,
+  nenNapNgam,
+  THU_MUC_DICH,
+  type EmailActions,
+} from '@/lib/email-actions'
 import { api, apiBaseUrlDaCauHinh } from '@/lib/api'
 import { trichCamKet, apLucTheoNgay } from '@/lib/cam-ket'
 import { chuyenCanh } from '@/lib/chuyen-canh'
@@ -78,8 +85,11 @@ export function AppShell() {
     api
       .listEmails({ folder })
       .then((r) => {
-        folderCache.current.set(folder, { items: r.items, cursor: r.nextCursor ?? null })
-        setEmails(r.items)
+        setEmails((truoc) => {
+          const gop = giuChiTietDaCo(truoc, r.items)
+          folderCache.current.set(folder, { items: gop, cursor: r.nextCursor ?? null })
+          return gop
+        })
         setNextCursor(r.nextCursor ?? null) // có cursor = còn thư để "Tải thêm"
         setLoiNapThu(null)
       })
@@ -198,9 +208,12 @@ export function AppShell() {
       .listEmails({ ...pageQuery, fresh: true })
       .then((r) => {
         // "Làm mới" cũng ghi đè cache thư mục hiện tại cho lần quay lại sau
-        if (pageQuery.folder)
-          folderCache.current.set(pageQuery.folder, { items: r.items, cursor: r.nextCursor ?? null })
-        setEmails(r.items)
+        setEmails((truoc) => {
+          const gop = giuChiTietDaCo(truoc, r.items)
+          if (pageQuery.folder)
+            folderCache.current.set(pageQuery.folder, { items: gop, cursor: r.nextCursor ?? null })
+          return gop
+        })
         setNextCursor(r.nextCursor ?? null)
       })
       .catch(() => {})
@@ -255,9 +268,14 @@ export function AppShell() {
             )
         }
         idsDaBiet.current = sau
-        if (pageQuery.folder)
-          folderCache.current.set(pageQuery.folder, { items: r.items, cursor: r.nextCursor ?? null })
-        setEmails(r.items)
+        // GIỮ phần chi tiết đã tải. Bản danh sách không có thân thư đầy đủ và không có
+        // tệp đính kèm — thay thẳng vào là thư đang mở bị nghèo đi trước mắt người đọc.
+        setEmails((truoc) => {
+          const gop = giuChiTietDaCo(truoc, r.items)
+          if (pageQuery.folder)
+            folderCache.current.set(pageQuery.folder, { items: gop, cursor: r.nextCursor ?? null })
+          return gop
+        })
         setNextCursor(r.nextCursor ?? null)
       })
       .catch(() => {})                            // hỏng thì im lặng: đây là việc nền

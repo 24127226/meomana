@@ -81,6 +81,49 @@ export function nenNapNgam(dk: {
   return !dk.dangNap && !dk.coTimKiem && dk.hienThi
 }
 
+/** Các trường CHỈ có ở bản chi tiết, không có ở bản danh sách. */
+type ChiTiet = {
+  body?: string[]
+  html?: string | null
+  attachments?: unknown[] | null
+  hasAttachment?: boolean
+}
+
+/**
+ * Trộn danh sách MỚI từ máy chủ mà KHÔNG làm nghèo đi thứ đã biết.
+ *
+ * ── VÌ SAO CẦN ──
+ * Danh sách và chi tiết là hai lần gọi khác nhau, trả về hai độ chi tiết khác nhau:
+ * danh sách chỉ có snippet, KHÔNG có thân thư đầy đủ, KHÔNG có tệp đính kèm (Gmail ở
+ * `format=metadata` không trả `payload.parts`). Nên mỗi lần thay cả mảng bằng bản danh
+ * sách là xoá sạch phần chi tiết đã tải.
+ *
+ * Trước khi có tự-nạp-lại-30-giây thì không ai thấy: danh sách chỉ được thay khi đổi
+ * thư mục, mà đổi thư mục thì đóng luôn thư đang mở. Thêm vòng nạp nền vào là lỗi lộ
+ * ra ngay — đang đọc một lá thư, chưa tới nửa phút thì tệp đính kèm và thân thư biến
+ * mất trước mắt, không lỗi, không dấu hiệu gì.
+ *
+ * Luật: bản mới THẮNG ở mọi trường nó có (đã đọc/chưa, gắn sao, nhãn, thư mục — đó là
+ * lý do ta nạp lại). Nhưng trường nào bản mới KHÔNG BIẾT thì giữ lại thứ đã biết,
+ * chứ không ghi đè bằng khoảng trống.
+ */
+export function giuChiTietDaCo<T extends { id: string } & ChiTiet>(cu: T[], moi: T[]): T[] {
+  if (!cu.length) return moi
+  const theoId = new Map(cu.map((e) => [e.id, e]))
+  return moi.map((m) => {
+    const c = theoId.get(m.id)
+    if (!c) return m
+    const gop: T = { ...m }
+    if (m.html == null && c.html != null) gop.html = c.html
+    if (m.attachments == null && c.attachments != null) gop.attachments = c.attachments
+    // Thân thư: bản danh sách chỉ có MỘT đoạn (snippet). Giữ bản dài hơn — nhưng chỉ
+    // khi bản mới đúng là bản rút gọn, để nội dung thật sự đổi vẫn được cập nhật.
+    if ((c.body?.length ?? 0) > (m.body?.length ?? 0)) gop.body = c.body
+    if (!m.hasAttachment && c.hasAttachment) gop.hasAttachment = true
+    return gop
+  })
+}
+
 /** Thư mục thư sẽ tới sau mỗi hành động — nguồn sự thật DUY NHẤT cho vòng lùi. */
 export const THU_MUC_DICH = {
   archive: 'archive',

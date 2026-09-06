@@ -84,11 +84,19 @@ export function EmailDetail({
     let huy = false
     setLuong([])
     setDaMo(new Set())          // đổi thư thì đóng hết, không giữ trạng thái thư cũ
+    // Đóng ô trả lời khi chuyển sang thư khác. Giữ lại thì nội dung viết dở cho thư A
+    // nằm sẵn trong ô trả lời của thư B — và bấm Gửi là gửi nhầm chỗ.
+    setTraLoiMo(false)
+    setNoiDungTraLoi('')
     api.getThread(email.id).then((ds) => { if (!huy) setLuong(ds ?? []) }).catch(() => {})
     return () => { huy = true }
   }, [email.id])
   // Bỏ chính thư đang mở ra khỏi danh sách "các lượt trước".
   const truocDo = useMemo(() => luong.filter((m) => m.id !== email.id), [luong, email.id])
+  const [traLoiMo, setTraLoiMo] = useState(false)
+  const [traLoiTatCa, setTraLoiTatCa] = useState(false)
+  const [noiDungTraLoi, setNoiDungTraLoi] = useState('')
+  const [dangGuiTraLoi, setDangGuiTraLoi] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
   const [fwdTo, setFwdTo] = useState('')
   const [fwdNote, setFwdNote] = useState('')
@@ -490,14 +498,74 @@ export function EmailDetail({
         </div>
       </div>
 
+      {/* ── Ô TRẢ LỜI TAY ────────────────────────────────────────────────────
+          Bấm "Trả lời" mà bị đẩy sang khung chat với trợ lý là đánh đồng hai việc
+          khác hẳn nhau. Người ta bấm Trả lời vì muốn TỰ VIẾT; nhờ AI viết là một ý
+          định riêng, và phải là một nút riêng. Gộp lại thì người dùng không có cách
+          nào chọn, và mất luôn đường viết tay. */}
+      {traLoiMo && (
+        <div className="border-t border-border/50 px-5 py-4">
+          <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            {t(traLoiTatCa ? 'det.replyAllTo' : 'det.replyTo', { ten: email.sender })}
+          </p>
+          <textarea
+            value={noiDungTraLoi}
+            onChange={(e) => setNoiDungTraLoi(e.target.value)}
+            rows={4}
+            autoFocus
+            placeholder={t('det.replyPlaceholder')}
+            className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--spark)]"
+          />
+          <div className="mt-2.5 flex items-center gap-2">
+            <Button
+              variant="primary"
+              disabled={!noiDungTraLoi.trim() || dangGuiTraLoi}
+              onClick={async () => {
+                setDangGuiTraLoi(true)
+                try {
+                  await api.replyEmail(id, noiDungTraLoi, traLoiTatCa)
+                  toast(t('toast.replySent'), 'success')
+                  setTraLoiMo(false)
+                  setNoiDungTraLoi('')
+                } catch {
+                  // Nói THẲNG là chưa gửi. Đóng ô rồi im lặng là để người dùng tin
+                  // thư đã đi, và họ chỉ biết khi người kia hỏi "sao chưa thấy".
+                  toast(t('toast.replyFailed'), 'destructive')
+                } finally {
+                  setDangGuiTraLoi(false)
+                }
+              }}
+            >
+              <Reply className="size-4" />
+              {dangGuiTraLoi ? t('det.replySending') : t('det.replySend')}
+            </Button>
+            {/* Nhờ AI viết hộ NGAY TRONG ô đang mở — không phải bỏ đi chỗ khác rồi
+                quay lại. Vẫn là hai ý định tách bạch, chỉ đặt cạnh nhau. */}
+            <Button
+              variant="outline"
+              onClick={() => onAgentAction?.(`soạn trả lời ${email.sender.split(' ').slice(-1)[0]}`)}
+            >
+              <Sparkles className="size-4" />
+              {t('det.replyAiWrite')}
+            </Button>
+            <Button variant="ghost" onClick={() => setTraLoiMo(false)}>
+              {t('act.cancel')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Chân — trả lời */}
-      <div className="flex items-center gap-2.5 border-t border-border/50 px-5 py-4">
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-border/50 px-5 py-4">
         <Button
           variant="primary"
-          onClick={() => onAgentAction?.(`soạn trả lời ${email.sender.split(' ').slice(-1)[0]}`)}
+          onClick={() => {
+            setTraLoiTatCa(false)
+            setTraLoiMo(true)
+          }}
         >
           <Reply className="size-4" />
-          Trả lời
+          {t('det.replySelf')}
         </Button>
         {/* Trả lời TẤT CẢ — chỉ hiện khi thư gốc THẬT SỰ có nhiều người.
             Hiện thường trực thì với thư một-đối-một nó là nút không làm gì khác nút bên
@@ -505,12 +573,23 @@ export function EmailDetail({
         {coNhieuNguoiNhan && (
           <Button
             variant="outline"
-            onClick={() => onAgentAction?.(`trả lời tất cả thư từ ${email.sender}`)}
+            onClick={() => {
+              setTraLoiTatCa(true)
+              setTraLoiMo(true)
+            }}
           >
             <ReplyAll className="size-4" />
             {t('det.replyAll')}
           </Button>
         )}
+        <Button
+          variant="outline"
+          onClick={() => onAgentAction?.(`soạn trả lời ${email.sender.split(' ').slice(-1)[0]}`)}
+          title={t('det.replyAiHint')}
+        >
+          <Sparkles className="size-4" />
+          {t('det.replyAi')}
+        </Button>
         <Button
           variant="outline"
           onClick={() => setForwardOpen(true)}

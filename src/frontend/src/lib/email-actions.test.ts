@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { apDungSuaLacQuan, ghimLenDau, nenNapNgam, THU_MUC_DICH } from './email-actions.ts'
+import {
+  apDungSuaLacQuan,
+  ghimLenDau,
+  giuChiTietDaCo,
+  nenNapNgam,
+  THU_MUC_DICH,
+} from './email-actions.ts'
 
 type Thu = { id: string; folder: string; unread?: boolean }
 const thu = (id: string, folder: string): Thu => ({ id, folder, unread: true })
@@ -108,4 +114,57 @@ test('nạp ngầm: KHÔNG đè lên kết quả tìm kiếm', () => {
 test('nạp ngầm: tab đang ẩn thì nghỉ', () => {
   // Tab nền chạy vòng lặp là đốt hạn mức Gmail cho một màn hình không ai nhìn.
   assert.equal(nenNapNgam({ dangNap: false, coTimKiem: false, hienThi: false }), false)
+})
+
+/* ── Trộn danh sách mới mà KHÔNG làm nghèo thứ đã biết ────────────────────────
+   Lỗi thật, do chính vòng tự-nạp-lại-30-giây gây ra: đang đọc một lá thư, chưa tới
+   nửa phút thì tệp đính kèm và thân thư biến mất trước mắt — không lỗi, không dấu
+   hiệu gì. Danh sách và chi tiết là hai lần gọi khác nhau, trả hai độ chi tiết khác
+   nhau; thay thẳng cả mảng bằng bản danh sách là xoá phần đã tải.                  */
+
+const dai = (id: string) => ({
+  id, folder: 'inbox',
+  body: ['đoạn 1', 'đoạn 2', 'đoạn 3'],
+  html: '<p>đầy đủ</p>',
+  attachments: [{ name: 'a.pdf', size: '1 MB' }],
+  hasAttachment: true,
+  unread: false,
+})
+const ngan = (id: string, them: Record<string, unknown> = {}) => ({
+  id, folder: 'inbox', body: ['snippet'], html: null, attachments: null,
+  hasAttachment: false, unread: true, ...them,
+})
+
+test('giữ thân thư, HTML và tệp khi bản mới không có', () => {
+  const ra = giuChiTietDaCo([dai('m1')], [ngan('m1')])
+  assert.equal(ra[0].body.length, 3)
+  assert.equal(ra[0].html, '<p>đầy đủ</p>')
+  assert.equal(ra[0].attachments?.length, 1)
+  assert.equal(ra[0].hasAttachment, true)
+})
+
+test('bản mới VẪN THẮNG ở những gì nó biết', () => {
+  // Nạp lại để thấy cái MỚI — giữ nguyên trạng thái cũ thì vòng nạp thành vô nghĩa.
+  const ra = giuChiTietDaCo([dai('m1')], [ngan('m1', { unread: true, folder: 'archive' })])
+  assert.equal(ra[0].unread, true)
+  assert.equal(ra[0].folder, 'archive')
+})
+
+test('nội dung thật sự đổi thì KHÔNG bị bản cũ đè', () => {
+  const moi = ngan('m1', { body: ['a', 'b', 'c', 'd'], html: '<p>mới</p>' })
+  const ra = giuChiTietDaCo([dai('m1')], [moi])
+  assert.equal(ra[0].body.length, 4)
+  assert.equal(ra[0].html, '<p>mới</p>')
+})
+
+test('thư mới hoàn toàn thì để nguyên', () => {
+  const ra = giuChiTietDaCo([dai('m1')], [ngan('m2')])
+  assert.equal(ra.length, 1)
+  assert.equal(ra[0].id, 'm2')
+  assert.equal(ra[0].attachments, null)
+})
+
+test('danh sách cũ rỗng thì trả thẳng bản mới', () => {
+  const moi = [ngan('m1')]
+  assert.equal(giuChiTietDaCo([], moi), moi)
 })
