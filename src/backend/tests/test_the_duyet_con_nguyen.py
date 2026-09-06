@@ -136,3 +136,22 @@ def test_danh_dau_KHONG_dung_toi_ngu_canh_agent_va_KHONG_doi_updated_at(bo):
     sau = db.get(Conversation, "c1")
     assert sau.agent_messages == [{"nguyen": "ven"}]
     assert sau.updated_at == truoc
+
+
+def test_ma_may_chu_TRA_RA_phai_TRUNG_ma_da_luu():
+    """Mắt xích thiếu của lần sửa trước — và là lý do bản vá đầu không chạy.
+
+    Giao diện tự gắn một mã cục bộ cho thẻ vừa nhận, còn máy chủ lưu bằng mã của nó.
+    Hai mã không bao giờ khớp, nên lệnh "đánh dấu đã duyệt" trỏ vào mã không tồn tại,
+    trả 404, và bị nuốt im lặng — bấm Duyệt xong tải lại trang là nút Duyệt mọc lại.
+
+    Không gọi cả `/agent/chat` (cần mô hình + Gmail thật) mà đọc thẳng mã nguồn: chốt
+    rằng máy chủ CÓ trả `messageId`, và mã đó là ĐÚNG mã nó vừa gắn vào tin nhắn agent,
+    không phải một mã sinh riêng cho phản hồi.
+    """
+    import inspect
+    from app.api import app as A
+
+    ma = inspect.getsource(A.agent_chat)
+    assert '"messageId": ma_agent' in ma, "phải trả về mã máy chủ vừa cấp"
+    assert '"id": ma_agent, "role": "agent"' in ma, "và đó phải là mã ĐÃ LƯU, không phải mã khác"

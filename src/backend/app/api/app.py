@@ -2323,12 +2323,20 @@ async def agent_chat(
         # VỊ TRÍ trong mảng, mà vị trí lệch ngay: giao diện còn tự chèn thêm thẻ "đã
         # xong" sau mỗi lần duyệt, những thẻ đó KHÔNG được lưu xuống. Đánh dấu nhầm
         # tin nhắn ở đây nghĩa là một thẻ xoá đã duyệt vẫn hiện nút duyệt.
+        ma_agent = uuid4().hex
         display.append({"id": uuid4().hex, "role": "user", "text": message})
-        display.append({"id": uuid4().hex, "role": "agent", "reply": out})
+        display.append({"id": ma_agent, "role": "agent", "reply": out})
         conversation_repo.save_turn(db, conv, agent_dump, display, first_user_text=message)
 
-        # Trả AgentReply kèm conversationId để FE biết phiên nào (nhất là khi phiên VỪA tạo).
-        return {**out, "conversationId": conv.id}
+        # Trả kèm conversationId (FE biết phiên nào, nhất là khi phiên VỪA tạo) VÀ
+        # messageId.
+        #
+        # `messageId` là mắt xích thiếu của lần sửa trước: giao diện tự gắn một mã cục
+        # bộ cho thẻ vừa nhận, còn máy chủ lưu bằng mã của nó — hai mã không bao giờ
+        # khớp. Nên lệnh "đánh dấu đã duyệt" trỏ vào một mã không tồn tại, trả 404, và
+        # bị nuốt im lặng. Kết quả: bấm Duyệt xong, tải lại trang là nút Duyệt mọc lại.
+        # Trả mã ra đây để hai bên gọi cùng một tên cho cùng một thẻ.
+        return {**out, "conversationId": conv.id, "messageId": ma_agent}
     except Exception as exc:
         # Lỗi bất ngờ (mạng/LLM/tool) → vẫn trả AgentReply hợp lệ, không vỡ FE.
         # PHÂN LOẠI để báo đúng bệnh thay vì ném stack-trace khó hiểu cho người dùng:

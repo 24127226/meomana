@@ -54,7 +54,10 @@ export type SendEmailInput = {
 
 /* --- UC011: lịch sử hội thoại ------------------------------------------------ */
 /** AgentReply kèm id phiên do BE trả về (để FE bám đúng cuộc trò chuyện). */
-export type AgentReplyWithId = AgentReply & { conversationId?: string }
+/** AgentReply kèm hai mã máy chủ cấp cho lượt này.
+ *  `messageId` là mã CỦA MÁY CHỦ cho đúng thẻ vừa nhận — phải dùng nó làm id cục bộ,
+ *  không tự sinh mã mới, nếu không thì không đánh dấu "đã duyệt" lên máy chủ được. */
+export type AgentReplyWithId = AgentReply & { conversationId?: string; messageId?: string }
 
 /** 1 tin trong lịch sử đã lưu (khuôn BE: user text HOẶC thẻ agent). */
 export type StoredMessage =

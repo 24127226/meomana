@@ -1606,7 +1606,9 @@ export function ChatPanel({
             prev.map((s) => (s.id === sid ? { ...s, backendId: reply.conversationId } : s)),
           )
         }
-        push({ id: uid(), role: 'agent', reply })
+        // DÙNG mã máy chủ vừa cấp, không sinh mã mới. Sinh mới thì mã cục bộ không
+        // khớp gì với bản đã lưu, và lệnh "đánh dấu đã duyệt" trỏ vào hư không.
+        push({ id: reply.messageId || uid(), role: 'agent', reply })
         if (viaVoice) speak(replyToSpeech(reply))
         void refreshSub() // lượt vừa rồi đã tiêu token → cập nhật lại đồng hồ
       })
@@ -1658,11 +1660,17 @@ export function ChatPanel({
       prev.map((m) => (m.id === id && m.role === 'agent' ? { ...m, resolved: true } : m)),
     )
     // GHI XUỐNG MÁY CHỦ. Chỉ đổi ở bộ nhớ trình duyệt thì tải lại trang là mất, và thẻ
-    // xoá đã duyệt lại mọc ra nút "Duyệt". Lỗi im lặng: hỏng thì thẻ vẫn đúng trong
-    // phiên đang mở, chỉ mất sau khi tải lại — không đáng làm phiền người dùng giữa
-    // lúc họ vừa duyệt xong một việc.
+    // xoá đã duyệt lại mọc ra nút "Duyệt".
+    //
+    // KHÔNG nuốt lỗi trong im lặng: chính `.catch(() => {})` đã giấu lỗ hổng lần trước
+    // (mã cục bộ không khớp mã máy chủ → 404 → không ai biết). Không làm phiền người
+    // dùng bằng toast — thẻ vẫn đúng trong phiên đang mở — nhưng phải để lại vết.
     const bid = sessions.find((s) => s.id === currentId)?.backendId
-    if (apiBaseUrlDaCauHinh && bid) api.resolveMessage(bid, id).catch(() => {})
+    if (apiBaseUrlDaCauHinh && bid) {
+      api.resolveMessage(bid, id).catch((e) => {
+        console.warn('[MeoArc] không lưu được trạng thái đã duyệt:', id, e)
+      })
+    }
   }
 
   const execOp = (op: PlanOp) => {
