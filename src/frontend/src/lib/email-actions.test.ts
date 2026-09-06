@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { apDungSuaLacQuan, ghimLenDau, THU_MUC_DICH } from './email-actions.ts'
+import { apDungSuaLacQuan, ghimLenDau, nenNapNgam, THU_MUC_DICH } from './email-actions.ts'
 
 type Thu = { id: string; folder: string; unread?: boolean }
 const thu = (id: string, folder: string): Thu => ({ id, folder, unread: true })
@@ -90,4 +90,22 @@ test('ghim giữ nguyên thứ tự máy chủ cho phần còn lại', () => {
   const ds = [thu('n1', 'inbox'), thu('n2', 'inbox'), thu('n3', 'inbox')]
   const ra = ghimLenDau(ds, [thu('n2', 'inbox')])
   assert.deepEqual(ra.map((e) => e.id), ['n2', 'n1', 'n3'])
+})
+
+test('nạp ngầm: đủ điều kiện thì cho chạy', () => {
+  assert.equal(nenNapNgam({ dangNap: false, coTimKiem: false, hienThi: true }), true)
+})
+
+test('nạp ngầm: KHÔNG chồng lên lượt đang chạy', () => {
+  // Hai lượt chồng nhau thì lượt về sau có thể là bản CŨ hơn, và danh sách nhảy ngược.
+  assert.equal(nenNapNgam({ dangNap: true, coTimKiem: false, hienThi: true }), false)
+})
+
+test('nạp ngầm: KHÔNG đè lên kết quả tìm kiếm', () => {
+  assert.equal(nenNapNgam({ dangNap: false, coTimKiem: true, hienThi: true }), false)
+})
+
+test('nạp ngầm: tab đang ẩn thì nghỉ', () => {
+  // Tab nền chạy vòng lặp là đốt hạn mức Gmail cho một màn hình không ai nhìn.
+  assert.equal(nenNapNgam({ dangNap: false, coTimKiem: false, hienThi: false }), false)
 })

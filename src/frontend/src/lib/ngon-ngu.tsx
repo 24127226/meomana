@@ -258,6 +258,8 @@ const TU_DIEN: Record<string, { vi: string; en: string }> = {
   // Nói rõ thư ĐANG Ở ĐÂU. Thư khôi phục quay về đúng vị trí thời gian cũ, nên thư cũ
   // rơi ra ngoài trang đầu và người dùng kết luận là khôi phục hụt. Câu này cùng với
   // việc ghim lên đầu Hộp thư trả lời thẳng câu "thế mail đâu".
+  'toast.newMailOne': { vi: 'Thư mới từ {ten}', en: 'New message from {ten}' },
+  'toast.newMail': { vi: 'Có {n} thư mới', en: '{n} new messages' },
   'toast.restored': {
     vi: 'Đã khôi phục {n} thư — đang ghim ở đầu Hộp thư',
     en: 'Restored {n} messages — pinned at the top of your inbox',

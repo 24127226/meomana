@@ -209,6 +209,30 @@ def count_unread(db: Session, user_id: int, provider: str, folder: str = "inbox"
     ) or 0
 
 
+def ids_da_co(db: Session, user_id: int, provider: str, ids: list[str]) -> set[str]:
+    """Trong `ids`, những g_id ĐÃ có sẵn trong DB.
+
+    Dùng để phân biệt thư THẬT SỰ MỚI với thư chỉ được cập nhật (đổi nhãn, đánh dấu đã
+    đọc...). Gmail history trộn chung "added" và "updated", nên không hỏi trước thì mỗi
+    lần ai đó đọc một lá thư cũ cũng thành "có thư mới" — báo sai vài lần là người dùng
+    thôi tin cái chuông.
+
+    MỘT câu truy vấn cho cả lô, không hỏi từng lá: một lần đồng bộ có thể chạm hàng chục
+    thư, và hỏi lẻ là hàng chục lượt đi lại CSDL cho một việc đáng lẽ chỉ tốn một.
+    """
+    if not ids:
+        return set()
+    return {
+        g for (g,) in db.execute(
+            select(StoredEmail.g_id).where(
+                StoredEmail.user_id == user_id,
+                StoredEmail.provider == provider,
+                StoredEmail.g_id.in_(ids),
+            )
+        )
+    }
+
+
 # ── WRITE-THROUGH: cập nhật DB sau khi hành động đã chạy thật trên Gmail/Graph ──
 def _rows(db, user_id, provider, ids):
     return db.scalars(

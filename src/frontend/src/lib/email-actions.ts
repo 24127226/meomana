@@ -58,6 +58,25 @@ export function ghimLenDau<T extends { id: string }>(ds: T[], ghim: T[]): T[] {
   return [...ghim, ...ds.filter((e) => !id.has(e.id))]
 }
 
+/**
+ * Có nên nạp lại hộp thư ngầm lúc này không.
+ *
+ * Tách ra khỏi component vì đây là phần DUY NHẤT của việc tự-nạp-lại có thể sai thầm
+ * lặng: vòng lặp vẫn chạy, không lỗi, chỉ là gọi sai lúc. Ba điều kiện, mỗi cái chặn
+ * một kiểu hỏng khác nhau:
+ *  • `dangNap` — hai lượt gọi chồng nhau thì lượt về sau có thể là bản CŨ hơn, và
+ *    danh sách nhảy ngược về trạng thái trước đó.
+ *  • `coTimKiem` — đè kết quả tìm kiếm bằng hộp thư đến là cướp mất thứ đang xem.
+ *  • `hienThi` — tab nền chạy vòng lặp là đốt hạn mức Gmail cho màn hình không ai nhìn.
+ */
+export function nenNapNgam(dk: {
+  dangNap: boolean
+  coTimKiem: boolean
+  hienThi: boolean
+}): boolean {
+  return !dk.dangNap && !dk.coTimKiem && dk.hienThi
+}
+
 /** Thư mục thư sẽ tới sau mỗi hành động — nguồn sự thật DUY NHẤT cho vòng lùi. */
 export const THU_MUC_DICH = {
   archive: 'archive',

@@ -7,11 +7,12 @@ import { CommandPalette } from '@/components/layout/command-palette'
 import { Onboarding } from '@/components/layout/onboarding'
 import { WanderingCat } from '@/components/wandering-cat'
 import { useTheme } from '@/components/theme-provider'
+import { useToast } from '@/components/ui/toast'
 import { emails as seedEmails } from '@/data/emails'
 import { CommitmentsView } from '@/components/layout/commitments-view'
 import { cn } from '@/lib/utils'
 import { AlertOverlay } from '@/components/layout/alert-overlay'
-import { apDungSuaLacQuan, ghimLenDau, THU_MUC_DICH, type EmailActions } from '@/lib/email-actions'
+import { apDungSuaLacQuan, ghimLenDau, nenNapNgam, THU_MUC_DICH, type EmailActions } from '@/lib/email-actions'
 import { api, apiBaseUrlDaCauHinh } from '@/lib/api'
 import { trichCamKet, apLucTheoNgay } from '@/lib/cam-ket'
 import { chuyenCanh } from '@/lib/chuyen-canh'
@@ -49,6 +50,7 @@ export function AppShell() {
   const [aiOpen, setAiOpen] = useState(true)
   const [chatFocus, setChatFocus] = useState(0)       // đếm số lần bấm tab AI Agent → focus chat
   const { theme, toggleTheme } = useTheme()
+  const toast = useToast()
 
   // Nav trái giờ luôn là thư mục thật; nút "AI Agent" là công tắc bật/tắt panel chat.
   const folder = activeNav
@@ -204,6 +206,91 @@ export function AppShell() {
       .catch(() => {})
       .finally(() => setRefreshing(false))
   }
+
+  /* ── TỰ NẠP LẠI HỘP THƯ ────────────────────────────────────────────────────
+     Trước đây hộp thư KHÔNG BAO GIỜ tự nạp lại: chỉ đổi thư mục hoặc bấm "Làm mới"
+     mới gọi máy chủ. Nên thư về tới Gmail mà người dùng đang mở sẵn màn danh sách thì
+     màn hình đứng im vĩnh viễn — ngồi chờ bao lâu cũng không có gì xảy ra. Nhìn từ
+     ngoài tưởng là "đồng bộ chậm", thật ra KHÔNG có đường nào nối "thư tới" với
+     "màn hình đổi".
+
+     Vài quyết định nhỏ nhưng đáng nói:
+     • `fresh: true` — bắt buộc. Gọi thường thì máy chủ phục vụ từ CSDL/cache, mà CSDL
+       chỉ đổi khi có ai đó chạy đồng bộ. Poll kiểu đó là hỏi lại đúng câu trả lời cũ
+       mãi mãi.
+     • CHỈ khi tab đang hiện. Tab nền chạy vòng lặp là đốt hạn mức Gmail cho một màn
+       hình không ai nhìn.
+     • Nạp NGAY khi quay lại tab. Đó là khoảnh khắc người ta muốn thấy cái mới nhất,
+       và chờ thêm 30 giây ở đúng lúc đó là dở nhất.
+     • BỎ QUA khi đang tìm kiếm: đè kết quả tìm kiếm bằng hộp thư đến là cướp mất thứ
+       người dùng đang xem.
+     • Trần đọc là 90 lượt/phút/người; 30 giây một lần tốn 2. Không chạm tới trần.  */
+  const dangNap = useRef(false)
+  const idsDaBiet = useRef<Set<string> | null>(null)
+
+  const napNgam = () => {
+    if (!apiBaseUrlDaCauHinh) return
+    const duocPhep = nenNapNgam({
+      dangNap: dangNap.current,
+      coTimKiem: !!pageQuery.q,
+      hienThi: typeof document === 'undefined' || document.visibilityState === 'visible',
+    })
+    if (!duocPhep) return
+    dangNap.current = true
+    api
+      .listEmails({ ...pageQuery, fresh: true })
+      .then((r) => {
+        const truoc = idsDaBiet.current
+        const sau = new Set(r.items.map((e) => e.id))
+        // Lần đầu chỉ GHI NHỚ, không báo: nếu không thì mở app lên là bị báo "có N thư
+        // mới" cho toàn bộ hộp thư — đúng kiểu thông báo khiến người ta tắt thông báo.
+        if (truoc) {
+          const moi = r.items.filter((e) => !truoc.has(e.id))
+          if (moi.length > 0)
+            toast(
+              moi.length === 1
+                ? t('toast.newMailOne', { ten: moi[0].sender })
+                : t('toast.newMail', { n: moi.length }),
+              'success',
+            )
+        }
+        idsDaBiet.current = sau
+        if (pageQuery.folder)
+          folderCache.current.set(pageQuery.folder, { items: r.items, cursor: r.nextCursor ?? null })
+        setEmails(r.items)
+        setNextCursor(r.nextCursor ?? null)
+      })
+      .catch(() => {})                            // hỏng thì im lặng: đây là việc nền
+      .finally(() => { dangNap.current = false })
+  }
+
+  // Đổi thư mục/truy vấn thì quên danh sách id cũ — không thì chuyển từ Thùng rác về
+  // Hộp thư sẽ bị báo "có 70 thư mới".
+  useEffect(() => { idsDaBiet.current = null }, [pageQuery.folder, pageQuery.q])
+
+  // Giữ bản MỚI NHẤT của `napNgam` trong một ref, rồi mới dựng bộ đếm MỘT LẦN.
+  //
+  // Viết thẳng `useEffect(..., [napNgam])` hay bỏ trống mảng phụ thuộc đều hỏng, theo
+  // hai kiểu ngược nhau: bỏ trống thì effect chạy lại sau MỌI lần render, tức bộ đếm
+  // 30 giây bị dựng lại liên tục và không bao giờ đếm hết — tính năng trông như không
+  // tồn tại. Còn `[]` với hàm gọi thẳng thì bộ đếm sống đúng một lần nhưng ôm mãi
+  // `pageQuery` của lần render đầu, nên đổi thư mục xong nó vẫn nạp thư mục cũ.
+  const napNgamRef = useRef(napNgam)
+  napNgamRef.current = napNgam
+
+  useEffect(() => {
+    if (!apiBaseUrlDaCauHinh) return
+    const goi = () => napNgamRef.current()
+    const t = window.setInterval(goi, 30_000)
+    const khiHien = () => { if (document.visibilityState === 'visible') goi() }
+    document.addEventListener('visibilitychange', khiHien)
+    window.addEventListener('focus', khiHien)
+    return () => {
+      window.clearInterval(t)
+      document.removeEventListener('visibilitychange', khiHien)
+      window.removeEventListener('focus', khiHien)
+    }
+  }, [])
 
   // UC003 — "Tải thêm": lấy TRANG KẾ (theo cursor) rồi NỐI vào danh sách hiện có.
   const loadMore = () => {
