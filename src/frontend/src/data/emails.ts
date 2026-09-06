@@ -106,7 +106,9 @@ const EMAILS_GOC: Email[] = [
     sender: 'Phòng Giáo vụ',
     senderEmail: 'giaovu@fit.hcmus.edu.vn',
     senderInitial: 'G',
-    to: ME,
+    // HAI người nhận — để "Trả lời tất cả" có nghĩa (nút chỉ hiện khi thư thật sự
+    // có nhiều người). Cũng sát thực tế hơn: giáo vụ trả lời thì Cc cả nhóm.
+    to: `${ME}, Nhóm 7 <nhom7@fit.hcmus.edu.vn>`,
     subject: 'Re: Nhắc nộp báo cáo SRS — Nhóm 7',
     preview: 'Để trong file Word là được em nhé...',
     body: [

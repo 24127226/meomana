@@ -24,6 +24,7 @@ from app.tools.schemas import (
     GetEmailInput, GetEmailOutput, EmailDetail,
     SendEmailInput, SendEmailOutput,
     ReplyEmailInput, ReplyEmailOutput,
+    ForwardEmailInput, ForwardEmailOutput,
     ApplyLabelsInput, ApplyLabelsOutput,
     BulkActionInput, BulkActionOutput, BulkAction,
     ListLabelsInput, ListLabelsOutput,
@@ -282,9 +283,29 @@ async def reply_email(inp: ReplyEmailInput, ctx: RequestContext) -> ReplyEmailOu
     để gửi — agent nên soạn/duyệt nội dung TRƯỚC rồi mới gọi tool này (TODO nhóm: tách bước soạn)."""
     res = await asyncio.to_thread(
         mail.reply_email, ctx.email_provider, ctx.access_token, inp.email_id, inp.instructions,
+        inp.reply_all,
     )
     return ReplyEmailOutput(
         success=True, message="Đã gửi trả lời.",
+        data={"message_id": res.get("id", ""), "thread_id": res.get("threadId", "")},
+    )
+
+
+@tool_registry.register(category=ToolCategory.WRITE_DESTRUCTIVE, input_schema=ForwardEmailInput)
+async def forward_email(inp: ForwardEmailInput, ctx: RequestContext) -> ForwardEmailOutput:
+    """CHUYỂN TIẾP một thư sang địa chỉ khác, kèm lời nhắn.
+
+    Xếp WRITE_DESTRUCTIVE nên đi qua cổng xác nhận như gửi/trả lời: thư đi rồi thì người
+    nhận đã thấy, không rút lại được. Và ở đây rủi ro còn RIÊNG một kiểu — chuyển tiếp là
+    đưa nội dung của NGƯỜI KHÁC cho người thứ ba, nên gửi nhầm địa chỉ là làm lộ thư của
+    một người không hề tham gia cuộc trao đổi.
+    """
+    res = await asyncio.to_thread(
+        mail.forward_email, ctx.email_provider, ctx.access_token,
+        inp.email_id, inp.to, inp.note,
+    )
+    return ForwardEmailOutput(
+        success=True, message=f"Đã chuyển tiếp thư tới {inp.to}.",
         data={"message_id": res.get("id", ""), "thread_id": res.get("threadId", "")},
     )
 
@@ -317,6 +338,10 @@ async def bulk_action(inp: BulkActionInput, ctx: RequestContext) -> BulkActionOu
         n = await asyncio.to_thread(mail.trash, p, tok, ids)
     elif a == BulkAction.RESTORE:
         n = await asyncio.to_thread(mail.untrash, p, tok, ids)
+    elif a == BulkAction.SPAM:
+        n = await asyncio.to_thread(mail.spam, p, tok, ids)
+    elif a == BulkAction.NOT_SPAM:
+        n = await asyncio.to_thread(mail.not_spam, p, tok, ids)
     elif a == BulkAction.MARK_READ:
         n = await asyncio.to_thread(mail.set_read, p, tok, ids, True)
     elif a == BulkAction.MARK_UNMARKED:

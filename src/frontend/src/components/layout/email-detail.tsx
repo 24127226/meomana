@@ -14,6 +14,10 @@ import {
   ListChecks,
   FileText,
   ChevronDown,
+  Forward,
+  ReplyAll,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { t } from '@/lib/ngon-ngu'
@@ -85,6 +89,13 @@ export function EmailDetail({
   }, [email.id])
   // Bỏ chính thư đang mở ra khỏi danh sách "các lượt trước".
   const truocDo = useMemo(() => luong.filter((m) => m.id !== email.id), [luong, email.id])
+  const [forwardOpen, setForwardOpen] = useState(false)
+  const [fwdTo, setFwdTo] = useState('')
+  const [fwdNote, setFwdNote] = useState('')
+  const [dangGui, setDangGui] = useState(false)
+  /* Thư có nhiều người nhận thì "Trả lời tất cả" mới có nghĩa. `to` là chuỗi người nhận
+     do nhà cung cấp trả về; nhiều địa chỉ thì ngăn bằng dấu phẩy. */
+  const coNhieuNguoiNhan = (email.to || '').split(',').filter((x) => x.trim()).length > 1
   const [labelOpen, setLabelOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showSummary, setShowSummary] = useState(true)
@@ -172,6 +183,28 @@ export function EmailDetail({
             }}
           />
           <ActionBtn icon={Tag} label={t('act.label')} onClick={() => setLabelOpen(true)} />
+          {/* Thư rác — HAI CHIỀU tuỳ chỗ đang đứng. Ở Thư rác thì nút "đánh dấu rác" vô
+              nghĩa, còn ở hộp thư thì nút "không phải rác" vô nghĩa. Một nút đổi theo
+              ngữ cảnh đúng hơn hai nút lúc nào cũng có một cái chết. */}
+          {email.folder === 'spam' ? (
+            <ActionBtn
+              icon={ShieldCheck}
+              label={t('act.notSpam')}
+              onClick={() => {
+                actions.markSpam([id], false)
+                toast(t('toast.notSpam'), 'success')
+              }}
+            />
+          ) : (
+            <ActionBtn
+              icon={ShieldAlert}
+              label={t('act.spam')}
+              onClick={() => {
+                actions.markSpam([id], true)
+                toast(t('toast.spam'), 'success')
+              }}
+            />
+          )}
           <ActionBtn icon={Trash2} label={t('act.delete')} onClick={() => setConfirmDelete(true)} />
           <button
             onClick={() => {
@@ -378,7 +411,11 @@ export function EmailDetail({
                       aria-expanded={mo}
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-foreground/[0.04]"
                     >
-                      <SenderAvatar name={m.sender} email={m.senderEmail} size={22} />
+                      <SenderAvatar
+                        email={m.senderEmail}
+                        initial={m.senderInitial || m.sender.slice(0, 1).toUpperCase()}
+                        className="size-6 shrink-0 text-[11px]"
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-foreground">
                           {m.sender}
@@ -478,11 +515,98 @@ export function EmailDetail({
           <Reply className="size-4" />
           Trả lời
         </Button>
+        {/* Trả lời TẤT CẢ — chỉ hiện khi thư gốc THẬT SỰ có nhiều người.
+            Hiện thường trực thì với thư một-đối-một nó là nút không làm gì khác nút bên
+            cạnh, và người dùng phải tự đoán xem hai nút khác nhau chỗ nào. */}
+        {coNhieuNguoiNhan && (
+          <Button
+            variant="outline"
+            onClick={() => onAgentAction?.(`trả lời tất cả thư từ ${email.sender}`)}
+          >
+            <ReplyAll className="size-4" />
+            {t('det.replyAll')}
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => setForwardOpen(true)}
+          title={t('det.forwardHint')}
+        >
+          <Forward className="size-4" />
+          {t('det.forward')}
+        </Button>
         <Button variant="outline" onClick={() => setShowSummary((v) => !v)}>
           <Sparkles className="size-4" />
           {t(showSummary ? 'det.hideSummary' : 'det.aiSummary')}
         </Button>
       </div>
+
+      {/* Hộp thoại chuyển tiếp — địa chỉ nhận PHẢI do người dùng gõ, không đoán. */}
+      <Dialog open={forwardOpen} onOpenChange={setForwardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Forward className="size-5" />
+              {t('det.forwardTitle')}
+            </DialogTitle>
+            <DialogDescription>{t('det.forwardDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {t('det.forwardTo')}
+              </span>
+              <input
+                type="email"
+                value={fwdTo}
+                onChange={(e) => setFwdTo(e.target.value)}
+                placeholder="ten@vidu.com"
+                autoFocus
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--spark)]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {t('det.forwardNote')}
+              </span>
+              <textarea
+                value={fwdNote}
+                onChange={(e) => setFwdNote(e.target.value)}
+                rows={3}
+                className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--spark)]"
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForwardOpen(false)}>
+              {t('act.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!fwdTo.trim() || dangGui}
+              onClick={async () => {
+                setDangGui(true)
+                try {
+                  await api.forwardEmail(id, fwdTo.trim(), fwdNote)
+                  toast(t('toast.forwarded', { ten: fwdTo.trim() }), 'success')
+                  setForwardOpen(false)
+                  setFwdTo('')
+                  setFwdNote('')
+                } catch {
+                  // Nói THẲNG là chưa gửi. Đóng hộp thoại rồi im lặng là để người dùng
+                  // tin thư đã đi, và họ chỉ phát hiện khi người kia hỏi "sao chưa thấy".
+                  toast(t('toast.forwardFailed'), 'destructive')
+                } finally {
+                  setDangGui(false)
+                }
+              }}
+            >
+              <Forward className="size-4" />
+              {dangGui ? t('det.forwardSending') : t('det.forwardDo')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog gắn nhãn */}
       <LabelDialog

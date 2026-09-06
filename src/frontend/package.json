@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "_ghi_chu_typecheck": "DÙNG LỆNH NÀY, ĐỪNG dùng `tsc --noEmit`: tsconfig.json gốc có files:[] và chỉ chứa references, nên `tsc --noEmit` KHÔNG kiểm file nào và LUÔN xanh — một cái bẫy im lặng.",
+    "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:gop": "vite build --mode gop",

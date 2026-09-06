@@ -43,6 +43,11 @@ class BulkAction(str, Enum):
     # tự vào Gmail bới. Trợ lý xoá hộ thì phải hoàn tác hộ được, nếu không thì
     # "hoàn tác được" chỉ đúng trên giấy.
     RESTORE = "restore"
+    # Thư rác: hai chiều, và CẢ HAI đều đảo ngược được nên không cần cổng xác nhận.
+    # Gắn nhầm rác còn gỡ ra được; dựng thêm một hàng rào ở đây chỉ làm người dùng
+    # quen bấm-cho-qua, rồi tới lúc gặp cổng THẬT (gửi/xoá) họ cũng bấm-cho-qua.
+    SPAM = "spam"
+    NOT_SPAM = "not_spam"
 
 
 # =========================================================
@@ -404,6 +409,31 @@ class ReplyEmailInput(BaseModel):
     # `instructions` được gửi đi NGUYÊN VĂN làm thân thư trả lời (xem docstring của
     # tool `reply_email`), nên chịu đúng lỗi chuỗi thoát như `SendEmailInput.body`.
     _go_thoat_instructions = field_validator("instructions", mode="before")(sua_xuong_dong)
+
+
+class ForwardEmailInput(BaseModel):
+    """Chuyển tiếp một thư sang địa chỉ khác.
+
+    KHÁC `reply_email` ở chỗ căn bản: trả lời là nói tiếp với NGƯỜI ĐÃ VIẾT cho mình,
+    còn chuyển tiếp là đưa nội dung đó cho NGƯỜI THỨ BA. Nên `to` là bắt buộc và không
+    suy ra được từ thư gốc — đoán bừa người nhận ở đây là gửi thư của người khác cho
+    một người không liên quan.
+    """
+
+    email_id: Annotated[str, Field(description="ID of the email to forward.")]
+    to: Annotated[str, Field(
+        description="Recipient email address. REQUIRED — never guess it from the original "
+                    "email; ask the user if unknown.",
+    )]
+    note: Annotated[str, Field(
+        description="Optional short note placed above the forwarded content.",
+    )] = ""
+
+    _go_thoat_note = field_validator("note", mode="before")(sua_xuong_dong)
+
+
+class ForwardEmailOutput(ToolResult):
+    data: dict[str, str] | None = None  # {message_id, thread_id}
 
 
 class ReplyEmailOutput(ToolResult):

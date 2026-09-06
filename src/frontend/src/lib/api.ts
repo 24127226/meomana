@@ -163,6 +163,9 @@ export interface MeoArcApi {
   setImportant(ids: string[], value: boolean): Promise<void>
   applyLabel(ids: string[], category: Category, label: string): Promise<void>
   archiveEmails(ids: string[]): Promise<void>
+  /** Đánh dấu / bỏ đánh dấu thư rác — cả hai chiều đều đảo ngược được. */
+  spamEmails(ids: string[]): Promise<void>
+  notSpamEmails(ids: string[]): Promise<void>
   deleteEmails(ids: string[]): Promise<void>
   /** Khôi phục thư từ thùng rác về hộp thư. */
   restoreEmails(ids: string[]): Promise<void>
@@ -170,7 +173,9 @@ export interface MeoArcApi {
   // Soạn & gửi — UC010
   sendEmail(input: SendEmailInput): Promise<{ id: string }>
   /** Trả lời 1 thư — BE tự suy người nhận/tiêu đề từ thư gốc, giữ đúng luồng. */
-  replyEmail(id: string, body: string): Promise<{ id: string }>
+  replyEmail(id: string, body: string, replyAll?: boolean): Promise<{ id: string }>
+  /** Chuyển tiếp thư sang địa chỉ khác, kèm lời nhắn. */
+  forwardEmail(id: string, to: string, note?: string): Promise<{ id: string }>
   /** Upload 1 tệp đính kèm lên backend → trả metadata { id, name, size }. */
   uploadFile(file: File): Promise<{ id: string; name: string; size: string }>
   /** UC010 — lưu bản nháp (không gửi) lên Gmail/Outlook + hiện ở tab Nháp. */
@@ -412,12 +417,18 @@ export function createMockApi(): MeoArcApi {
     async setImportant() {},
     async applyLabel() {},
     async archiveEmails() {},
+    async spamEmails() {},
+    async notSpamEmails() {},
     async deleteEmails() {},
     async restoreEmails() {},
 
     async sendEmail() {
       await delay(300)
       return { id: `mock-${Date.now()}` }
+    },
+    async forwardEmail() {
+      await delay(250)
+      return { id: `mock-fwd-${Date.now()}` }
     },
     async replyEmail() {
       await delay(300)
@@ -582,12 +593,17 @@ export function createHttpApi(baseUrl: string): MeoArcApi {
     applyLabel: (ids, category, label) =>
       post<void>('/emails/actions/label', { ids, category, label }),
     archiveEmails: (ids) => post<void>('/emails/actions/archive', { ids }),
+    spamEmails: (ids) => post<void>('/emails/actions/spam', { ids }),
+    notSpamEmails: (ids) => post<void>('/emails/actions/not-spam', { ids }),
     deleteEmails: (ids) => post<void>('/emails/actions/delete', { ids }),
     restoreEmails: (ids) => post<void>('/emails/actions/restore', { ids }),
 
     sendEmail: (input) => post<{ id: string }>('/emails/send', input),
 
-    replyEmail: (id, body) => post<{ id: string }>(`/emails/${id}/reply`, { body }),
+    replyEmail: (id, body, replyAll = false) =>
+      post<{ id: string }>(`/emails/${id}/reply`, { body, replyAll }),
+    forwardEmail: (id, to, note = '') =>
+      post<{ id: string }>(`/emails/${id}/forward`, { to, note }),
 
     // Upload tệp = multipart/form-data (KHÔNG đặt Content-Type để trình duyệt tự thêm boundary).
     uploadFile: async (file) => {

@@ -214,10 +214,29 @@ def create_draft(access_token: str, to, subject: str, body: str,
     return {"id": d.get("id", ""), "message": {"id": d.get("id", ""), "threadId": d.get("conversationId")}}
 
 
-def reply_email(access_token: str, msg_id: str, body: str, **_ignore) -> dict:
+def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
+                **_ignore) -> dict:
+    """Trả lời thư. `reply_all=True` dùng endpoint /replyAll của Graph — nó tự dựng danh
+    sách người nhận, nên không phải tự lọc trùng/loại mình như bản Gmail."""
+    duong = "replyAll" if reply_all else "reply"
     with httpx.Client(timeout=15) as c:
-        r = c.post(f"{GRAPH}/me/messages/{msg_id}/reply",
+        r = c.post(f"{GRAPH}/me/messages/{msg_id}/{duong}",
                    headers=_hdr(access_token), json={"comment": body})
+        r.raise_for_status()
+    return {"id": "", "threadId": ""}
+
+
+def forward_email(access_token: str, msg_id: str, to: str, note: str = "") -> dict:
+    """Chuyển tiếp thư — Graph có sẵn endpoint /forward, tự trích thư gốc và giữ đính kèm.
+
+    Ở đây Graph LÀM ĐƯỢC NHIỀU HƠN Gmail: nó tự đính kèm lại tệp gốc. Bản Gmail phải tự
+    dựng nội dung nên không mang tệp theo — khác biệt đó được nói thẳng trong docstring
+    của `gmail_send.forward_email` chứ không giấu đi.
+    """
+    with httpx.Client(timeout=20) as c:
+        r = c.post(f"{GRAPH}/me/messages/{msg_id}/forward", headers=_hdr(access_token),
+                   json={"comment": note,
+                         "toRecipients": [{"emailAddress": {"address": to}}]})
         r.raise_for_status()
     return {"id": "", "threadId": ""}
 
@@ -266,6 +285,21 @@ def untrash(access_token: str, ids: list[str]) -> int:
 
 def archive(access_token: str, ids: list[str]) -> int:
     return _move(access_token, ids, "archive")
+
+
+def spam(access_token: str, ids: list[str]) -> int:
+    """Chuyển thư vào Thư rác (Junk Email)."""
+    return _move(access_token, ids, "junkemail")
+
+
+def not_spam(access_token: str, ids: list[str]) -> int:
+    """Đưa thư từ Thư rác về Hộp thư — đường lùi của `spam`.
+
+    Đây mới là chiều người ta cần gấp: thư quan trọng bị lọc nhầm vào Thư rác, và họ
+    đang hoảng đi tìm. Có chiều đi mà không có chiều về thì tính năng chỉ làm được nửa
+    việc, và là nửa ít quan trọng hơn.
+    """
+    return _move(access_token, ids, "inbox")
 
 
 def set_categories(access_token: str, ids: list[str], cats: list[str]) -> int:

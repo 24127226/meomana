@@ -38,10 +38,18 @@ def send_email(provider: str, token: str, to, subject, body, cc=None, bcc=None, 
     return gmail_send.send_email(token, to, subject, body, cc=cc, bcc=bcc, attachments=attachments or [])
 
 
-def reply_email(provider: str, token: str, msg_id: str, body: str):
+def forward_email(provider: str, token: str, msg_id: str, to: str, note: str = ""):
+    """Chuyển tiếp thư tới một địa chỉ khác, kèm lời nhắn."""
     if _ms(provider):
-        return outlook_service.reply_email(token, msg_id, body)
-    return gmail_send.reply_email(token, msg_id, body)
+        return outlook_service.forward_email(token, msg_id, to, note)
+    return gmail_send.forward_email(token, msg_id, to, note)
+
+
+def reply_email(provider: str, token: str, msg_id: str, body: str, reply_all: bool = False):
+    """Trả lời thư. `reply_all=True` gửi cho cả những người có mặt trong thư gốc."""
+    if _ms(provider):
+        return outlook_service.reply_email(token, msg_id, body, reply_all=reply_all)
+    return gmail_send.reply_email(token, msg_id, body, reply_all=reply_all)
 
 
 def create_draft(provider: str, token: str, to, subject, body, cc=None, bcc=None, attachments=None):
@@ -71,6 +79,22 @@ def archive(provider: str, token: str, ids: list[str]) -> int:
     if _ms(provider):
         return outlook_service.archive(token, ids)
     return gmail_actions.modify_labels(token, ids, remove=["INBOX"])
+
+
+def spam(provider: str, token: str, ids: list[str]) -> int:
+    """Đánh dấu thư rác. Gmail: thêm nhãn SPAM và bỏ INBOX cùng lúc — thiếu vế bỏ INBOX
+    thì thư nằm ở CẢ hai chỗ, và người dùng thấy thứ mình vừa vứt đi vẫn còn trong hộp
+    thư."""
+    if _ms(provider):
+        return outlook_service.spam(token, ids)
+    return gmail_actions.modify_labels(token, ids, add=["SPAM"], remove=["INBOX"])
+
+
+def not_spam(provider: str, token: str, ids: list[str]) -> int:
+    """Bỏ đánh dấu thư rác, trả thư về hộp thư — đường lùi của `spam`."""
+    if _ms(provider):
+        return outlook_service.not_spam(token, ids)
+    return gmail_actions.modify_labels(token, ids, add=["INBOX"], remove=["SPAM"])
 
 
 def trash(provider: str, token: str, ids: list[str]) -> int:

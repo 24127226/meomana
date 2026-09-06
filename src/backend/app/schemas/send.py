@@ -20,8 +20,12 @@ class SendReq(BaseModel):
 
 
 class ReplyReq(BaseModel):
-    """POST /emails/{id}/reply — chỉ cần nội dung; người nhận/tiêu đề BE tự suy từ thư gốc."""
+    """POST /emails/{id}/reply — chỉ cần nội dung; người nhận/tiêu đề BE tự suy từ thư gốc.
+
+    `replyAll=True` gửi cho cả những người có mặt trong thư gốc (To + Cc), trừ chính mình.
+    Mặc định False để nút "Trả lời" cũ giữ nguyên hành vi."""
     body: str
+    replyAll: bool = False
 
 
 class SendResult(BaseModel):

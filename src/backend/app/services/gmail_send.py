@@ -12,6 +12,7 @@
 
 import base64
 from email.message import EmailMessage
+from email.utils import parseaddr
 import httpx
 from app.services import gmail_service
 from app.services.gmail_actions import GmailPermissionError  # tái dùng lỗi 403 cho nhất quán
@@ -125,7 +126,99 @@ def send_email(
     return _post_send(access_token, raw)
 
 
-def reply_email(access_token: str, msg_id: str, body: str) -> dict:
+def forward_email(access_token: str, msg_id: str, to: str, note: str = "") -> dict:
+    """CHUYỂN TIẾP thư msg_id tới `to`, kèm lời nhắn `note` ở đầu.
+
+    ── VÌ SAO PHẢI TRÍCH NỘI DUNG GỐC, KHÔNG CHỈ GỬI LỜI NHẮN ──
+    Chuyển tiếp mà chỉ gửi mỗi câu "bạn xem giúp mình nhé" thì người nhận không có gì
+    để xem. Trích cả khối gốc (người gửi, ngày, tiêu đề, thân thư) theo đúng quy ước
+    "---------- Thư đã chuyển tiếp ----------" mà mọi ứng dụng thư đều dùng, nên người
+    nhận đọc bằng Gmail/Outlook đều thấy đúng hình dạng quen thuộc.
+
+    KHÔNG mang theo TỆP ĐÍNH KÈM (giới hạn đã biết, nói thẳng): làm được nhưng phải tải
+    từng tệp về rồi đính lại, tức nhân đôi lưu lượng và có thể vượt trần dung lượng thư.
+    Để lại chứ không làm nửa vời — và phần thân thư trích dẫn đã nêu tên tệp, nên người
+    nhận biết là có.
+
+    KHÔNG gắn In-Reply-To/References: chuyển tiếp là MỞ một cuộc trao đổi mới với người
+    khác, không phải nối tiếp cuộc cũ. Gắn vào thì thư lạc vào luồng của người không
+    liên quan.
+    """
+    headers = {"Authorization": f"Bearer {access_token}"}
+    with httpx.Client(timeout=15) as client:
+        r = client.get(GMAIL_GET.format(id=msg_id), headers=headers, params={"format": "full"})
+        if r.status_code == 403:
+            raise GmailPermissionError()
+        r.raise_for_status()
+        goc = r.json()
+
+    def _h(name: str) -> str:
+        for h in goc.get("payload", {}).get("headers", []):
+            if h.get("name", "").lower() == name.lower():
+                return h.get("value", "")
+        return ""
+
+    from app.services.gmail_service import _extract_body
+
+    than, _html, dinh_kem = _extract_body(goc.get("payload", {}))
+    subject = _h("Subject") or "(không tiêu đề)"
+    if not subject.lower().startswith(("fwd:", "fw:")):
+        subject = f"Fwd: {subject}"
+
+    khoi = ["---------- Thư đã chuyển tiếp ----------",
+            f"Từ: {_h('From')}",
+            f"Ngày: {_h('Date')}",
+            f"Tiêu đề: {_h('Subject')}",
+            f"Tới: {_h('To')}"]
+    if dinh_kem:
+        khoi.append("Tệp đính kèm (không kèm theo thư này): "
+                    + ", ".join(a["name"] for a in dinh_kem))
+    khoi.append("")
+    khoi.append(than or goc.get("snippet", ""))
+
+    noi_dung = (f"{note.strip()}\n\n" if note.strip() else "") + "\n".join(khoi)
+    return _post_send(access_token, _build_raw(to=to, subject=subject, body=noi_dung))
+
+
+def cc_tra_loi_tat_ca(to_goc: str, cc_goc: str, nguoi_gui: str, toi: str) -> list[str] | None:
+    """Danh sách Cc cho "trả lời tất cả" — mọi người có mặt trong thư gốc, TRỪ hai người.
+
+    Tách ra khỏi phần gọi mạng vì đây mới là chỗ có logic, và là chỗ sai thì KHÔNG AI
+    THẤY: thư vẫn gửi đi, chỉ là gửi nhầm người hoặc thiếu người.
+
+    Loại CHÍNH MÌNH — không thì mỗi lần trả lời tất cả là tự gửi cho mình một bản.
+    Loại NGƯỜI GỬI — họ đã nằm ở To rồi; để cả hai chỗ thì họ nhận hai bản.
+    Khử trùng — một người có tên ở cả To lẫn Cc của thư gốc cũng nhận hai bản.
+
+    Trả None (không phải danh sách rỗng) khi không còn ai: `_build_raw` bỏ qua Cc rỗng,
+    nên trả None cho đúng ý "không có Cc" thay vì một header trống.
+    """
+    from email.utils import getaddresses
+
+    da_co = {(toi or "").lower(), parseaddr(nguoi_gui)[1].lower()}
+    da_co.discard("")
+    ra: list[str] = []
+    for _ten, dia in getaddresses([to_goc or "", cc_goc or ""]):
+        d = (dia or "").lower()
+        if d and d not in da_co:
+            da_co.add(d)
+            ra.append(dia)
+    return ra or None
+
+
+def _dia_chi_cua_toi(access_token: str) -> str:
+    """Địa chỉ của chính tài khoản đang đăng nhập — để loại mình ra khỏi Cc khi trả lời
+    tất cả. Không loại thì mỗi lần trả lời tất cả là tự gửi cho mình một bản."""
+    try:
+        with httpx.Client(timeout=10) as c:
+            r = c.get(gmail_service.GMAIL_PROFILE, headers={"Authorization": f"Bearer {access_token}"})
+            r.raise_for_status()
+            return (r.json().get("emailAddress") or "").lower()
+    except Exception:
+        return ""
+
+
+def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False) -> dict:
     """TRẢ LỜI thư có id=msg_id: tự điền người nhận = người gửi gốc, tiêu đề "Re: …",
     và gắn các header In-Reply-To/References + threadId để Gmail XẾP vào đúng luồng."""
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -135,7 +228,10 @@ def reply_email(access_token: str, msg_id: str, body: str) -> dict:
             GMAIL_GET.format(id=msg_id),
             headers=headers,
             params={"format": "metadata",
-                    "metadataHeaders": ["From", "Subject", "Message-ID", "References"]},
+                    # "To"/"Cc" là BẮT BUỘC cho trả-lời-tất-cả. Thiếu chúng thì Gmail trả về header
+             # rỗng, danh sách Cc dựng ra rỗng theo, và "trả lời tất cả" IM LẶNG thành trả
+             # lời thường — không lỗi, không cảnh báo, chỉ là mấy người kia không nhận được.
+             "metadataHeaders": ["From", "To", "Cc", "Subject", "Message-ID", "References"]},
         )
         if r.status_code == 403:
             raise GmailPermissionError()
@@ -155,8 +251,16 @@ def reply_email(access_token: str, msg_id: str, body: str) -> dict:
     msg_ref = _h("Message-ID")             # mã định danh thư gốc → để Gmail nối luồng
     references = (_h("References") + " " + msg_ref).strip()  # chuỗi nối các thư trong luồng
 
+    # ── TRẢ LỜI TẤT CẢ ──
+    # Cc = mọi người có mặt trong thư gốc (To + Cc), TRỪ chính mình và trừ người gửi
+    # (đã nằm ở To rồi). Không loại mình thì mỗi lần trả lời tất cả là tự gửi cho mình
+    # một bản; không khử trùng thì một người có tên ở cả To lẫn Cc sẽ nhận hai bản.
+    cc: list[str] | None = None
+    if reply_all:
+        cc = cc_tra_loi_tat_ca(_h("To"), _h("Cc"), from_addr, _dia_chi_cua_toi(access_token))
+
     raw = _build_raw(
-        to=from_addr, subject=subject, body=body,
+        to=from_addr, subject=subject, body=body, cc=cc,
         extra_headers={"In-Reply-To": msg_ref, "References": references},
     )
     # threadId của thư gốc → bảo Gmail xếp thư trả lời vào CÙNG hội thoại.

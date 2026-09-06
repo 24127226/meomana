@@ -377,6 +377,18 @@ export function AppShell() {
       suaThu(ids, (e) => ({ ...e, folder: THU_MUC_DICH.restore }), THU_MUC_DICH.restore)
       if (apiBaseUrlDaCauHinh) api.restoreEmails(ids).then(resync).catch(resync)
     },
+    markSpam: (ids, rac) => {
+      // Cùng khuôn với các hành động khác: đổi thư mục lạc quan rồi gọi máy chủ.
+      // `spam` là một THƯ MỤC thật trong `Email.folder`, nên thư đi đúng chỗ và
+      // thư mục Thư rác ở nav hiện ra ngay, không phải chờ nạp lại.
+      const dich = rac ? ('spam' as const) : ('inbox' as const)
+      suaThu(ids, (e) => ({ ...e, folder: dich }), dich)
+      if (openedId && ids.includes(openedId)) setOpenedId(null)
+      if (apiBaseUrlDaCauHinh) {
+        const xong = rac ? api.spamEmails(ids) : api.notSpamEmails(ids)
+        xong.catch(resync)
+      }
+    },
     removeEmails: (ids, mode = 'delete') => {
       // CHUYỂN thư mục, không xoá khỏi mảng. Lọc bỏ hẳn thì thư biến mất khỏi hộp thư
       // ĐÚNG như mong muốn, nhưng cũng không bao giờ hiện ra ở Thùng rác/Lưu trữ —

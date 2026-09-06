@@ -40,6 +40,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.core.labeling import ALL_CATEGORIES
+from app.tools.schemas import BulkAction
 from app.models.session import AuthSession
 from app.repo import session_repo, audit_repo, subscription_repo, connected_account_repo
 from app.services import auth_service, auth_service_ms
@@ -222,6 +223,8 @@ _HAU_QUA = {
                            "không khôi phục — người dùng lấy lại từ giao diện MeoArc hoặc "
                            "Gmail), nhưng sẽ biến khỏi hộp thư."),
     "send_email": "KHÔNG HOÀN TÁC — thư gửi đi rồi thì người nhận đã thấy, không rút lại được.",
+    "forward_email": ("KHÔNG HOÀN TÁC, và nó đưa nội dung của NGƯỜI KHÁC cho người thứ ba — "
+                      "soát kỹ địa chỉ nhận trước khi duyệt."),
     "reply_email": "KHÔNG HOÀN TÁC — thư trả lời gửi đi rồi thì người nhận đã thấy.",
 }
 
@@ -307,16 +310,24 @@ async def send_email(to: list[str], subject: str, body: str,
     return res
 
 
-async def reply_email(email_id: str, reply_body: str, confirm: bool = False) -> dict:
+async def reply_email(email_id: str, reply_body: str, reply_all: bool = False,
+                      confirm: bool = False) -> dict:
     """TRẢ LỜI 1 email (tự giữ đúng luồng/thread) — KHÔNG HOÀN TÁC, cần confirm=true
-    sau khi người dùng đã duyệt nội dung reply_body."""
+    sau khi người dùng đã duyệt nội dung reply_body.
+    reply_all=True gửi cho CẢ những người có mặt trong thư gốc (To + Cc), trừ chính mình —
+    nói rõ điều đó trong bản xem trước, vì số người nhận là thứ người dùng cần biết TRƯỚC
+    khi duyệt."""
     if not confirm:
         return _needs_confirm("reply_email", {
             "email_id": email_id,
+            "reply_all": reply_all,
+            "pham_vi": "tất cả người trong thư gốc" if reply_all else "chỉ người gửi",
             "reply_preview": reply_body[:300] + ("…" if len(reply_body) > 300 else ""),
         })
-    res = await _call("reply_email", {"email_id": email_id, "instructions": reply_body})
-    _audit_mcp("reply_email", "reply_email", [email_id], res, {"email_id": email_id})
+    res = await _call("reply_email", {"email_id": email_id, "instructions": reply_body,
+                                      "reply_all": reply_all})
+    _audit_mcp("reply_email", "reply_email", [email_id], res,
+               {"email_id": email_id, "reply_all": reply_all})
     return res
 
 
@@ -331,11 +342,21 @@ async def apply_labels(email_ids: list[str], labels_to_add: list[str] | None = N
     return res
 
 
+async def forward_email(email_id: str, to: str, note: str = "", confirm: bool = False) -> dict:
+    """CHUYỂN TIẾP một thư sang địa chỉ khác — KHÔNG HOÀN TÁC, cần confirm=true.
+    `to` BẮT BUỘC và không được đoán từ thư gốc: chuyển tiếp là đưa nội dung của NGƯỜI
+    KHÁC cho người thứ ba, gửi nhầm địa chỉ là làm lộ thư của người không liên quan.
+    Lần đầu gọi (confirm=false) trả bản xem trước để hỏi người dùng."""
+    if not confirm:
+        return _needs_confirm("forward_email", {"email_id": email_id, "to": to, "note": note})
+    res = await _call("forward_email", {"email_id": email_id, "to": to, "note": note})
+    _audit_mcp("forward_email", "forward_email", [email_id], res, {"to": to})
+    return res
+
+
 async def bulk_action(email_ids: list[str], action: str, label_name: str | None = None,
                       confirm: bool = False) -> dict:
-    """Thao tác HÀNG LOẠT. action ∈ {'delete','mark_read','mark_unread','apply_label','remove_label'}
-    (chữ thường). 'delete' = chuyển thùng rác, tối đa 100 thư/lần. Riêng 'delete' cần confirm=true
-    sau khi người dùng duyệt danh sách."""
+    # Docstring lắp ở dưới từ enum `BulkAction` — xem ghi chú ở đó.
     if action.strip().lower() == "delete" and not confirm:
         return _needs_confirm("bulk_action:delete", {
             "action": "delete", "so_thu": len(email_ids),
@@ -346,6 +367,19 @@ async def bulk_action(email_ids: list[str], action: str, label_name: str | None 
     _audit_mcp(f"bulk_{action.strip().lower()}", "bulk_action", email_ids, res,
                {"action": action, "count": len(email_ids), "label_name": label_name})
     return res
+
+
+# ── DANH SÁCH HÀNH ĐỘNG PHẢI SINH RA, KHÔNG CHÉP TAY ──
+# Dòng này ĐÃ trôi một lần: 'restore' thêm vào enum từ lâu mà docstring vẫn liệt kê
+# năm hành động cũ, nên agent ngoài không biết là khôi phục được thư. Cùng một lỗi với
+# danh sách nhãn ở `categorize_emails`. Lắp từ enum thì hết trôi.
+bulk_action.__doc__ = (
+    "Thao tác HÀNG LOẠT. action ∈ {"
+    + ",".join(f"'{a.value}'" for a in BulkAction)
+    + "} (chữ thường). 'delete' = chuyển thùng rác (khôi phục được bằng 'restore'); "
+      "'spam'/'not_spam' = đánh dấu / bỏ đánh dấu thư rác. Tối đa 100 thư/lần. "
+      "Riêng 'delete' cần confirm=true sau khi người dùng duyệt danh sách."
+)
 
 
 # ══════════════ LỊCH TRÌNH & ĐI LẠI — phần LÀM NÊN MeoArc ══════════════
@@ -413,7 +447,7 @@ async def tim_khach_san(thanh_pho: str, nhan_phong: str, tra_phong: str,
 # nhận + cổng tiền. Cổng đó gắn với phiên người dùng trên web; phơi qua stdio là mở
 # đường vòng qua chính lớp bảo vệ đó. Đặt chỗ vẫn phải bấm duyệt trên web.
 for _fn in (search_emails, semantic_search, categorize_emails, get_email, list_labels,
-            send_email, reply_email, apply_labels, bulk_action,
+            send_email, reply_email, forward_email, apply_labels, bulk_action,
             liet_ke_cam_ket, ap_luc_lich_trinh, de_xuat_di_lai,
             tim_chuyen_bay, tim_khach_san):
     mcp.tool()(_fn)

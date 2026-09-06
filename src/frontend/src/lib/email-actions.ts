@@ -11,6 +11,10 @@ export type EmailActions = {
   removeEmails: (ids: string[], mode?: 'archive' | 'delete') => void
   /** Đưa thư từ thùng rác trở lại hộp thư — đường lùi cho `removeEmails('delete')`. */
   restoreEmails: (ids: string[]) => void
+  /** Đánh dấu thư rác (`rac=true`) hoặc trả về hộp thư (`rac=false`).
+   *  MỘT hàm hai chiều thay vì hai hàm: chúng luôn đi cùng nhau, và tách ra là mở đường
+   *  cho một bên được cập nhật còn bên kia bị bỏ quên. */
+  markSpam: (ids: string[], rac: boolean) => void
 }
 
 /** Một mục cache thư mục (stale-while-revalidate) — chỉ cần `items` để suy luận. */

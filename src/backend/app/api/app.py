@@ -1094,6 +1094,35 @@ def action_restore(req: IdsReq, token: str = Depends(get_gmail_token),
     return result
 
 
+@app.post("/emails/actions/spam", response_model=ActionResult)
+def action_spam(req: IdsReq, token: str = Depends(get_gmail_token),
+                provider: str = Depends(get_provider),
+                session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
+    """Đánh dấu thư rác (Gmail: thêm nhãn SPAM + bỏ INBOX · Outlook: chuyển Junk Email)."""
+    result = _write(lambda: mail.spam(provider, token, req.ids))
+    _wt(lambda: email_store_repo.move_folder(db, session.user_id, provider, req.ids, "spam"))
+    _record(db, session.user_id, action="spam", ids=req.ids, tool_name="bulk_action",
+            notify=f"Đã đánh dấu {len(req.ids)} thư là thư rác.", notify_type="info")
+    return result
+
+
+@app.post("/emails/actions/not-spam", response_model=ActionResult)
+def action_not_spam(req: IdsReq, token: str = Depends(get_gmail_token),
+                    provider: str = Depends(get_provider),
+                    session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
+    """Bỏ đánh dấu thư rác, đưa thư về hộp thư.
+
+    Chiều này mới là chiều người ta cần gấp: một lá thư quan trọng bị lọc nhầm vào Thư
+    rác, và họ đang hoảng đi tìm. Có chiều đi mà không có chiều về thì chỉ làm được nửa
+    việc, và là nửa ít quan trọng hơn.
+    """
+    result = _write(lambda: mail.not_spam(provider, token, req.ids))
+    _wt(lambda: email_store_repo.move_folder(db, session.user_id, provider, req.ids, "inbox"))
+    _record(db, session.user_id, action="not_spam", ids=req.ids, tool_name="bulk_action",
+            notify=f"Đã đưa {len(req.ids)} thư về hộp thư.", notify_type="success")
+    return result
+
+
 @app.post("/emails/actions/label", response_model=ActionResult)
 def action_label(req: LabelReq, token: str = Depends(get_gmail_token),
                  provider: str = Depends(get_provider),
@@ -1171,13 +1200,42 @@ def reply_email_route(email_id: str, req: ReplyReq, bg: BackgroundTasks,
                       provider: str = Depends(get_provider),
                       session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
     """Trả lời thư email_id: BE tự suy người nhận/tiêu đề/luồng từ thư gốc, chỉ cần `body`."""
-    res = _guard(lambda: mail.reply_email(provider, token, email_id, req.body))
+    res = _guard(lambda: mail.reply_email(provider, token, email_id, req.body,
+                                         reply_all=req.replyAll))
     new_id = res.get("id", "")
     _record(db, session.user_id, action="reply_email", tool_name="reply_email",
             ids=[i for i in (email_id, new_id) if i], details={"reply_to": email_id},
             notify="Đã gửi trả lời trong đúng luồng thư.", notify_type="success")
     if settings.mailbox_store_enabled:
         bg.add_task(_bg_sync, session.user_id, provider, token)  # Sent hiện ngay
+    return SendResult(id=new_id, threadId=res.get("threadId"))
+
+
+class ForwardReq(BaseModel):
+    """POST /emails/{id}/forward — `to` BẮT BUỘC, `note` là lời nhắn đặt ở đầu."""
+    to: str
+    note: str = ""
+
+
+@app.post("/emails/{email_id}/forward", response_model=SendResult)
+def forward_email_route(email_id: str, req: ForwardReq, bg: BackgroundTasks,
+                        token: str = Depends(get_gmail_token),
+                        provider: str = Depends(get_provider),
+                        session: AuthSession = Depends(get_current_session),
+                        db: Session = Depends(get_db)):
+    """Chuyển tiếp thư sang địa chỉ khác, kèm nội dung thư gốc được trích dẫn.
+
+    Rủi ro RIÊNG của chuyển tiếp: nó đưa nội dung của NGƯỜI KHÁC cho người thứ ba. Gửi
+    nhầm địa chỉ là làm lộ thư của một người không hề tham gia cuộc trao đổi — nặng hơn
+    gửi nhầm thư của chính mình. Nên ghi nhật ký kèm địa chỉ nhận để còn lần ra được.
+    """
+    res = _guard(lambda: mail.forward_email(provider, token, email_id, req.to, req.note))
+    new_id = res.get("id", "")
+    _record(db, session.user_id, action="forward_email", tool_name="forward_email",
+            ids=[i for i in (email_id, new_id) if i], details={"to": req.to},
+            notify=f"Đã chuyển tiếp thư tới {req.to}.", notify_type="success")
+    if settings.mailbox_store_enabled:
+        bg.add_task(_bg_sync, session.user_id, provider, token)
     return SendResult(id=new_id, threadId=res.get("threadId"))
 
 
