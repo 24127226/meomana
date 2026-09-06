@@ -1184,7 +1184,8 @@ def send_email_route(req: SendReq, bg: BackgroundTasks, token: str = Depends(get
                     "được gửi — bạn đính lại tệp rồi gửi giúp mình nhé."),
         )
     res = _guard(lambda: mail.send_email(
-        provider, token, req.to, req.subject, req.body, cc=req.cc, bcc=req.bcc, attachments=attachments,
+        provider, token, req.to, req.subject, req.body, cc=req.cc, bcc=req.bcc,
+        attachments=attachments, html=req.html,
     ))
     new_id = res.get("id", "")
     _record(db, session.user_id, action="send_email", tool_name="send_email",
@@ -1202,7 +1203,7 @@ def reply_email_route(email_id: str, req: ReplyReq, bg: BackgroundTasks,
                       session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
     """Trả lời thư email_id: BE tự suy người nhận/tiêu đề/luồng từ thư gốc, chỉ cần `body`."""
     res = _guard(lambda: mail.reply_email(provider, token, email_id, req.body,
-                                         reply_all=req.replyAll))
+                                         reply_all=req.replyAll, html=req.html))
     new_id = res.get("id", "")
     _record(db, session.user_id, action="reply_email", tool_name="reply_email",
             ids=[i for i in (email_id, new_id) if i], details={"reply_to": email_id},

@@ -179,12 +179,15 @@ def get_thread(access_token: str, thread_id: str) -> list[Email]:
 
 
 def send_email(access_token: str, to: str, subject: str, body: str,
-               cc=None, bcc=None, **_ignore) -> dict:
+               cc=None, bcc=None, html: str | None = None, **_ignore) -> dict:
     def _recips(s):
         return [{"emailAddress": {"address": a.strip()}} for a in
                 (s if isinstance(s, list) else str(s).split(",")) if str(a).strip()]
-    msg = {"subject": subject, "body": {"contentType": "Text", "content": body},
-           "toRecipients": _recips(to)}
+    # Graph chỉ nhận MỘT bản thân thư (khác Gmail gửi được cả hai). Có HTML thì gửi
+    # HTML — Outlook tự sinh bản chữ thuần cho phía nhận khi cần.
+    than = ({"contentType": "HTML", "content": html} if html and html.strip()
+            else {"contentType": "Text", "content": body})
+    msg = {"subject": subject, "body": than, "toRecipients": _recips(to)}
     if cc:
         msg["ccRecipients"] = _recips(cc)
     if bcc:
@@ -216,13 +219,15 @@ def create_draft(access_token: str, to, subject: str, body: str,
 
 
 def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
-                **_ignore) -> dict:
+                html: str | None = None, **_ignore) -> dict:
     """Trả lời thư. `reply_all=True` dùng endpoint /replyAll của Graph — nó tự dựng danh
     sách người nhận, nên không phải tự lọc trùng/loại mình như bản Gmail."""
     duong = "replyAll" if reply_all else "reply"
     with httpx.Client(timeout=15) as c:
+        # Graph nhận `comment` là chuỗi; gửi thẳng HTML vào đó thì Outlook hiện đúng
+        # định dạng. Không có HTML thì giữ chữ thuần như cũ.
         r = c.post(f"{GRAPH}/me/messages/{msg_id}/{duong}",
-                   headers=_hdr(access_token), json={"comment": body})
+                   headers=_hdr(access_token), json={"comment": (html or body)})
         r.raise_for_status()
     return {"id": "", "threadId": ""}
 

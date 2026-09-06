@@ -58,7 +58,10 @@ def _bat_gmail(monkeypatch) -> dict:
     có nghĩa."""
     ghi: dict = {}
 
-    def gia(provider, token, to, subject, body, cc=None, bcc=None, attachments=None):
+    # `**_` để bản giả không vỡ mỗi khi hàm thật thêm tham số (vd `html`). Phép thử này
+    # kiểm ĐÍNH KÈM, không kiểm chữ ký hàm — bắt nó khai đủ tham số là biến nó thành
+    # một cái bẫy đỏ mỗi lần mở rộng tính năng, không liên quan gì tới thứ nó bảo vệ.
+    def gia(provider, token, to, subject, body, cc=None, bcc=None, attachments=None, **_):
         ghi.update(to=to, subject=subject, attachments=attachments)
         return {"id": "m1", "threadId": "t1"}
 
@@ -160,7 +163,7 @@ def test_hop_thoai_soan_thu_cung_dinh_duoc_tep(app_client, monkeypatch):
     c, _ = app_client
     ghi: dict = {}
 
-    def gia(provider, token, to, subject, body, cc=None, bcc=None, attachments=None):
+    def gia(provider, token, to, subject, body, cc=None, bcc=None, attachments=None, **_):
         ghi.update(to=to, attachments=attachments)
         return {"id": "m1", "threadId": "t1"}
 

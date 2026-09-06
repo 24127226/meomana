@@ -48,6 +48,7 @@ def _build_raw(
     extra_headers: dict[str, str] | None = None,
     attachments: list[dict] | None = None,
     from_addr: str | None = None,
+    html: str | None = None,
 ) -> str:
     """Dựng bức thư MIME rồi mã hoá base64url (đúng thứ Gmail field "raw" cần).
 
@@ -77,6 +78,15 @@ def _build_raw(
     for k, v in (extra_headers or {}).items():
         msg[k] = v
     msg.set_content(body)                # thân thư dạng text thuần (phần "chữ" của email)
+    # ── ĐỊNH DẠNG: gửi KÈM bản HTML, không THAY bản chữ thuần ──
+    # `add_alternative` dựng multipart/alternative: ứng dụng thư nào đọc được HTML thì
+    # hiện chữ đậm/nghiêng/màu, chỗ nào không (thư thoại, máy đọc màn hình, ứng dụng cũ)
+    # thì vẫn còn bản chữ để đọc. Gửi MỖI HTML là bỏ rơi nhóm sau — và đó thường là
+    # nhóm cần nội dung nhất.
+    # Thứ tự BẮT BUỘC: bản chữ trước, HTML sau. Chuẩn MIME quy ước bản CUỐI là bản ưa
+    # dùng, nên đảo lại là mọi người đều nhận bản chữ trơn.
+    if html and html.strip():
+        msg.add_alternative(html, subtype="html")
 
     for att in attachments or []:
         # mime kiểu "image/png" → tách thành maintype="image", subtype="png".
@@ -116,13 +126,14 @@ def send_email(
     bcc: list[str] | None = None,
     attachments: list[dict] | None = None,
     from_addr: str | None = None,
+    html: str | None = None,
 ) -> dict:
     """GỬI một thư MỚI (kèm tệp nếu có). Trả dict Gmail ({id, threadId,...}) để FE biết đã gửi.
 
     from_addr: xem `_build_raw` — chỉ đổi được TÊN HIỂN THỊ, địa chỉ vẫn là tài khoản
       đang đăng nhập. Dùng cho kịch bản dựng bộ thư demo."""
     raw = _build_raw(to, subject, body, cc=cc, bcc=bcc, attachments=attachments,
-                     from_addr=from_addr)
+                     from_addr=from_addr, html=html)
     return _post_send(access_token, raw)
 
 
@@ -218,7 +229,8 @@ def _dia_chi_cua_toi(access_token: str) -> str:
         return ""
 
 
-def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False) -> dict:
+def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
+                html: str | None = None) -> dict:
     """TRẢ LỜI thư có id=msg_id: tự điền người nhận = người gửi gốc, tiêu đề "Re: …",
     và gắn các header In-Reply-To/References + threadId để Gmail XẾP vào đúng luồng."""
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -260,7 +272,7 @@ def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = Fal
         cc = cc_tra_loi_tat_ca(_h("To"), _h("Cc"), from_addr, _dia_chi_cua_toi(access_token))
 
     raw = _build_raw(
-        to=from_addr, subject=subject, body=body, cc=cc,
+        to=from_addr, subject=subject, body=body, cc=cc, html=html,
         extra_headers={"In-Reply-To": msg_ref, "References": references},
     )
     # threadId của thư gốc → bảo Gmail xếp thư trả lời vào CÙNG hội thoại.

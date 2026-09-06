@@ -17,6 +17,9 @@ class SendReq(BaseModel):
     cc: list[str] | None = None
     bcc: list[str] | None = None
     attachmentIds: list[str] | None = None
+    # Bản CÓ ĐỊNH DẠNG (đậm/nghiêng/gạch chân/màu). Gửi KÈM `body` chứ không thay:
+    # ứng dụng đọc được HTML thì hiện định dạng, chỗ nào không thì vẫn còn chữ để đọc.
+    html: str | None = None
 
 
 class ReplyReq(BaseModel):
@@ -26,6 +29,7 @@ class ReplyReq(BaseModel):
     Mặc định False để nút "Trả lời" cũ giữ nguyên hành vi."""
     body: str
     replyAll: bool = False
+    html: str | None = None
 
 
 class SendResult(BaseModel):

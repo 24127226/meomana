@@ -32,10 +32,12 @@ def get_thread(provider: str, token: str, thread_id: str):
     return gmail_service.get_thread(token, thread_id)
 
 
-def send_email(provider: str, token: str, to, subject, body, cc=None, bcc=None, attachments=None):
+def send_email(provider: str, token: str, to, subject, body, cc=None, bcc=None,
+               attachments=None, html=None):
     if _ms(provider):
-        return outlook_service.send_email(token, to, subject, body, cc=cc, bcc=bcc)
-    return gmail_send.send_email(token, to, subject, body, cc=cc, bcc=bcc, attachments=attachments or [])
+        return outlook_service.send_email(token, to, subject, body, cc=cc, bcc=bcc, html=html)
+    return gmail_send.send_email(token, to, subject, body, cc=cc, bcc=bcc,
+                                 attachments=attachments or [], html=html)
 
 
 def forward_email(provider: str, token: str, msg_id: str, to: str, note: str = ""):
@@ -45,11 +47,13 @@ def forward_email(provider: str, token: str, msg_id: str, to: str, note: str = "
     return gmail_send.forward_email(token, msg_id, to, note)
 
 
-def reply_email(provider: str, token: str, msg_id: str, body: str, reply_all: bool = False):
-    """Trả lời thư. `reply_all=True` gửi cho cả những người có mặt trong thư gốc."""
+def reply_email(provider: str, token: str, msg_id: str, body: str, reply_all: bool = False,
+                html: str | None = None):
+    """Trả lời thư. `reply_all=True` gửi cho cả những người có mặt trong thư gốc.
+    `html` là bản có định dạng, gửi KÈM bản chữ thuần chứ không thay."""
     if _ms(provider):
-        return outlook_service.reply_email(token, msg_id, body, reply_all=reply_all)
-    return gmail_send.reply_email(token, msg_id, body, reply_all=reply_all)
+        return outlook_service.reply_email(token, msg_id, body, reply_all=reply_all, html=html)
+    return gmail_send.reply_email(token, msg_id, body, reply_all=reply_all, html=html)
 
 
 def create_draft(provider: str, token: str, to, subject, body, cc=None, bcc=None, attachments=None):

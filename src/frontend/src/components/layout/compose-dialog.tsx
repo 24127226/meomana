@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   PenSquare,
+  Palette,
+  RemoveFormatting,
   Send,
   CheckCircle2,
   ArrowLeft,
@@ -38,10 +40,49 @@ type Attachment = { id?: string; name: string; size: string; loi?: boolean }
 const fieldCls =
   'w-full bg-transparent text-sm text-popover-foreground outline-none placeholder:text-popover-foreground/40'
 
-function ToolbarBtn({ icon: Icon }: { icon: React.ElementType }) {
+/** Một nút định dạng cho ô soạn thư.
+ *
+ *  ── TRƯỚC ĐÂY NĂM NÚT NÀY KHÔNG LÀM GÌ CẢ ──
+ *  Thanh định dạng đã có sẵn từ bản dựng giao diện, nhưng `ToolbarBtn` không hề có
+ *  `onClick` — bấm vào là không có chuyện gì xảy ra. Nút có mà bấm không ăn còn tệ hơn
+ *  không có nút: người dùng thử vài lần rồi kết luận cả ứng dụng hỏng.
+ *
+ *  Dùng `document.execCommand`. Nó đã bị đánh dấu deprecated nhưng KHÔNG có thứ thay
+ *  thế được chuẩn hoá, và mọi trình duyệt hiện tại vẫn chạy. Lựa chọn còn lại là kéo về
+ *  một thư viện soạn thảo — thêm vài trăm KB và một phụ thuộc mới cho năm cái nút, vài
+ *  ngày trước buổi bảo vệ. Đánh đổi có chủ ý.
+ */
+function ToolbarBtn({
+  icon: Icon,
+  nhan,
+  lenh,
+  gtri,
+  onXong,
+}: {
+  icon: React.ElementType
+  nhan: string
+  lenh: string
+  gtri?: string
+  onXong: () => void
+}) {
   return (
     <button
       type="button"
+      title={nhan}
+      aria-label={nhan}
+      // Bấm nút KHÔNG được cướp con trỏ khỏi ô soạn — mất vùng đang bôi đen thì lệnh
+      // định dạng chẳng áp vào đâu cả.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        if (lenh === 'createLink') {
+          const url = window.prompt(t('cmp.linkPrompt'))
+          if (!url) return
+          document.execCommand('createLink', false, url)
+        } else {
+          document.execCommand(lenh, false, gtri)
+        }
+        onXong()
+      }}
       className="flex size-8 items-center justify-center rounded-lg text-popover-foreground/60 transition-colors hover:bg-popover-foreground/10 hover:text-popover-foreground"
     >
       <Icon className="size-4" />
@@ -65,12 +106,20 @@ export function ComposeDialog() {
   const [showCc, setShowCc] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [html, setHtml] = useState('')
+  /* CHẾ ĐỘ TRẢ LỜI. Cùng một form, chỉ khác đích đến khi bấm Gửi:
+     có `replyToId` thì gửi qua /emails/{id}/reply để Gmail xếp ĐÚNG LUỒNG hội thoại;
+     không có thì là thư mới. Dựng một form riêng cho trả lời là chép lại toàn bộ phần
+     đính kèm, CC/BCC, gợi ý địa chỉ — rồi hai bên lệch nhau dần. */
+  const [replyToId, setReplyToId] = useState<string | null>(null)
+  const [replyAll, setReplyAll] = useState(false)
   const [files, setFiles] = useState<Attachment[]>([])
   const [dragging, setDragging] = useState(false)
   const [justDropped, setJustDropped] = useState(false) // bật vệt sáng chạy viền sau khi thả
   const [sending, setSending] = useState(false) // đang gọi backend gửi thư (khoá nút, chống gửi 2 lần)
   const [sendError, setSendError] = useState<string | null>(null) // báo lỗi nếu Gmail từ chối
   const fileRef = useRef<HTMLInputElement>(null)
+  const oRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
   // #3 — autocomplete người nhận (như Gmail)
   const [toSuggest, setToSuggest] = useState<{ name: string; email: string }[]>([])
@@ -94,6 +143,27 @@ export function ComposeDialog() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
+
+  /* Mở từ nút "Trả lời" ở màn chi tiết. Dùng sự kiện window thay vì luồn prop qua
+     email-list → EmailDetail: hộp thoại này vốn tự quản trạng thái mở, và luồn prop
+     qua hai tầng chỉ để bật một cờ là thêm hai chỗ có thể quên truyền. */
+  useEffect(() => {
+    const onMo = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      setReplyToId(d.replyToId || null)
+      setReplyAll(!!d.replyAll)
+      setTo(d.to || '')
+      setSubject(d.subject || '')
+      setBody('')
+      setHtml('')
+      setFiles([])
+      setStep('compose')
+      setSendError(null)
+      setOpen(true)
+    }
+    window.addEventListener('meoarc:soan-tra-loi', onMo)
+    return () => window.removeEventListener('meoarc:soan-tra-loi', onMo)
+  }, [])
 
   // #9 — "Soạn với AI": stream chữ kiểu typewriter + ghost text + con trỏ bokeh
   const [aiTyping, setAiTyping] = useState(false)
@@ -234,6 +304,27 @@ export function ComposeDialog() {
       api.suggestCompose(subject, v).then((s) => setGhost(s.trim())).catch(() => setGhost(''))
     }, 900)
   }
+  /* Ô soạn là contentEditable nên React KHÔNG tự vẽ lại nội dung theo state. Những
+     chỗ đặt `body` từ bên ngoài (nhờ AI soạn, chèn gợi ý bằng Tab) sẽ đổi state mà màn
+     hình đứng yên — người dùng bấm "Nhờ AI viết" rồi không thấy gì.
+
+     Chỉ ghi khi chữ trong ô KHÁC `body`: lúc đang gõ thì hai bên luôn bằng nhau, nên
+     effect không chạm vào và con trỏ không bị nhảy về đầu. */
+  useEffect(() => {
+    const el = oRef.current
+    if (!el || el.innerText === body) return
+    el.textContent = body
+    setHtml(el.innerHTML)
+  }, [body])
+
+  /** Đọc lại ô soạn sau mỗi lệnh định dạng — giữ `body` (chữ thuần) và `html` khớp DOM. */
+  const dongBoHtml = () => {
+    const el = oRef.current
+    if (!el) return
+    setBody(el.innerText)
+    setHtml(el.innerHTML)
+  }
+
   const acceptGhost = () => {
     if (!ghost) return
     setBody((b) => (b && !/[\s\n]$/.test(b) ? b + ' ' : b) + ghost)
@@ -265,15 +356,21 @@ export function ComposeDialog() {
     setSending(true)
     setSendError(null)
     try {
-      await api.sendEmail({
-        to: to.trim(),
-        cc: splitAddrs(cc),
-        bcc: splitAddrs(bcc),
-        subject,
-        body,
-        // chỉ gửi các tệp ĐÃ upload thành công (có id); bỏ tệp fallback không id.
-        attachmentIds: files.map((f) => f.id).filter((x): x is string => !!x),
-      })
+      if (replyToId) {
+        // Trả lời: BE tự suy người nhận/tiêu đề/luồng từ thư gốc.
+        await api.replyEmail(replyToId, body, replyAll, html)
+      } else {
+        await api.sendEmail({
+          to: to.trim(),
+          cc: splitAddrs(cc),
+          bcc: splitAddrs(bcc),
+          subject,
+          body,
+          html,
+          // chỉ gửi các tệp ĐÃ upload thành công (có id); bỏ tệp fallback không id.
+          attachmentIds: files.map((f) => f.id).filter((x): x is string => !!x),
+        })
+      }
       setStep('sent')
     } catch (e) {
       setSendError(e instanceof Error ? e.message : t('cmp.sendFail'))
@@ -298,7 +395,11 @@ export function ComposeDialog() {
         {step === 'compose' && (
           <>
             <DialogHeader>
-              <DialogTitle>{t('act.compose')}</DialogTitle>
+              {/* Tiêu đề nói đúng việc đang làm. Để "Soạn thư mới" khi đang trả lời thì
+                  người dùng tưởng mình bấm nhầm, và không chắc thư có vào đúng luồng không. */}
+              <DialogTitle>
+                {t(replyToId ? (replyAll ? 'det.replyAll' : 'det.replySelf') : 'act.compose')}
+              </DialogTitle>
             </DialogHeader>
 
             {/* Vùng form (chặn trình duyệt tự mở file nếu lỡ thả trượt ra ngoài khung) */}
@@ -386,12 +487,30 @@ export function ComposeDialog() {
 
               {/* Thanh định dạng */}
               <div className="flex items-center gap-0.5 border-b border-border/30 px-2 py-1">
-                <ToolbarBtn icon={Bold} />
-                <ToolbarBtn icon={Italic} />
-                <ToolbarBtn icon={Underline} />
+                <ToolbarBtn icon={Bold} nhan={t('cmp.bold')} lenh="bold" onXong={dongBoHtml} />
+                <ToolbarBtn icon={Italic} nhan={t('cmp.italic')} lenh="italic" onXong={dongBoHtml} />
+                <ToolbarBtn icon={Underline} nhan={t('cmp.underline')} lenh="underline" onXong={dongBoHtml} />
                 <span className="mx-1 h-5 w-px bg-border/40" />
-                <ToolbarBtn icon={List} />
-                <ToolbarBtn icon={Link2} />
+                <ToolbarBtn icon={List} nhan={t('cmp.bullets')} lenh="insertUnorderedList" onXong={dongBoHtml} />
+                <ToolbarBtn icon={Link2} nhan={t('cmp.link')} lenh="createLink" onXong={dongBoHtml} />
+                {/* Màu chữ dùng ô chọn màu của trình duyệt — không tự dựng bảng màu,
+                    và người dùng đã quen cái này ở mọi ứng dụng khác. */}
+                <label
+                  title={t('cmp.color')}
+                  className="flex size-8 cursor-pointer items-center justify-center rounded-lg text-popover-foreground/60 transition-colors hover:bg-popover-foreground/10 hover:text-popover-foreground"
+                >
+                  <Palette className="size-4" />
+                  <input
+                    type="color"
+                    className="sr-only"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onChange={(e) => {
+                      document.execCommand('foreColor', false, e.target.value)
+                      dongBoHtml()
+                    }}
+                  />
+                </label>
+                <ToolbarBtn icon={RemoveFormatting} nhan={t('cmp.clearFormat')} lenh="removeFormat" onXong={dongBoHtml} />
                 <button
                   type="button"
                   onClick={aiCompose}
@@ -419,18 +538,31 @@ export function ComposeDialog() {
                   <span className="text-popover-foreground/30">{aiTarget.slice(aiTyped)}</span>
                 </div>
               ) : (
-                <textarea
-                  className={`${fieldCls} min-h-44 resize-none px-3.5 py-3 leading-relaxed`}
-                  placeholder={t('mail.bodyPlaceholder')}
-                  value={body}
-                  onChange={(e) => onBodyChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && ghost) {
-                      e.preventDefault()
-                      acceptGhost()
-                    }
-                  }}
-                />
+                <div>
+                  <div
+                    ref={oRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    aria-multiline="true"
+                    aria-label={t('mail.bodyPlaceholder')}
+                    data-rong={body.length === 0 || undefined}
+                    className={`${fieldCls} o-soan min-h-44 px-3.5 py-3 leading-relaxed`}
+                    onInput={(e) => {
+                      const el = e.currentTarget
+                      // Giữ HAI bản song song: `body` là chữ thuần (Smart Compose và
+                      // gợi ý đều làm việc trên chữ), `html` là bản có định dạng để gửi.
+                      onBodyChange(el.innerText)
+                      setHtml(el.innerHTML)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && ghost) {
+                        e.preventDefault()
+                        acceptGhost()
+                      }
+                    }}
+                  />
+                </div>
               )}
 
               {/* #2 — Smart Compose: gợi ý đoạn tiếp theo (bấm hoặc nhấn Tab để chèn) */}

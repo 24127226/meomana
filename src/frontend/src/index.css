@@ -3100,3 +3100,18 @@
 .rui-ro-3 .cham-rr, .cham-rr.c3 { box-shadow: 0 0 8px var(--rr-khong); background: var(--rr-khong) }
 .cham-rr.c2 { background: var(--rr-can) }
 .cham-rr.c1 { background: var(--rr-hoan) }
+
+/* ── Ô soạn thư có định dạng ──────────────────────────────────────────────────
+   `contentEditable` KHÔNG có thuộc tính placeholder như <textarea>, nên phải tự vẽ
+   chữ mờ. Bỏ qua thì ô trống trơn và không ai biết gõ vào đâu.
+   `data-rong` do React đặt khi nội dung rỗng — bám vào `:empty` thì hỏng, vì trình
+   duyệt tự chèn <br> vào ô rỗng và selector không còn khớp.                        */
+.o-soan {
+  overflow-y: auto;
+  max-height: 40vh;
+}
+.o-soan[data-rong]::before {
+  content: attr(aria-label);
+  color: color-mix(in srgb, currentColor 45%, transparent);
+  pointer-events: none;   /* chữ mờ không được nuốt cú bấm vào ô */
+}
