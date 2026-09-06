@@ -99,6 +99,7 @@ def _to_email(m: dict, folder: str = "inbox", full: bool = False) -> Email:
         label=nhom.label,
         folder=folder,                 # type: ignore[arg-type]
         threadId=m.get("conversationId"),
+        hasAttachment=bool(m.get("hasAttachments")),   # Graph nói thẳng, khỏi suy
         html=html_body,
         attachments=(atts or None),    # type: ignore[arg-type]
     )

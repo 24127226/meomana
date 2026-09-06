@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Search,
   Star,
+  Paperclip,
   RefreshCw,
   SlidersHorizontal,
   Sparkles,
@@ -289,8 +290,20 @@ function EmailCard({
             >
               {email.subject}
             </span>
+            {/* Kẹp giấy — dấu hiệu DUY NHẤT cho biết thư có tệp mà không phải mở ra.
+                Thiếu nó thì người gửi bảo "mình gửi file rồi" mà nhìn hộp thư không
+                thấy gì, và người nhận kết luận là app làm mất tệp. */}
+            {(email.hasAttachment || (email.attachments?.length ?? 0) > 0) && (
+              <Paperclip
+                className="ml-auto size-3.5 shrink-0 text-muted-foreground"
+                aria-label={t('mail.hasAttachment')}
+              />
+            )}
             {email.starred && (
-              <Star className="ml-auto size-3.5 shrink-0" style={{ fill: c.bar, color: c.bar }} />
+              <Star
+                className={cn('size-3.5 shrink-0', !(email.hasAttachment || email.attachments?.length) && 'ml-auto')}
+                style={{ fill: c.bar, color: c.bar }}
+              />
             )}
           </div>
 

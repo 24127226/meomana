@@ -151,6 +151,19 @@ def _nhan_nguoi_dung_dat(label_ids: list[str], ban_do: dict[str, str]):
     return None
 
 
+def _co_dinh_kem(msg: dict) -> bool:
+    """Thư này có tệp đính kèm không — suy từ mimeType, dùng cho DANH SÁCH.
+
+    Ở `format=metadata` Gmail KHÔNG trả `payload.parts` (đã đo trên thư thật), nên không
+    có cách nào biết TÊN tệp mà không tải thêm một lượt cho mỗi thư — tức nhân số lượt
+    gọi Gmail lên gấp đôi chỉ để vẽ một cái kẹp giấy.
+    `multipart/mixed` là khuôn Gmail dùng khi có tệp đính kèm; thư chỉ có text+HTML là
+    `multipart/alternative`, thư có ảnh nhúng là `multipart/related`. Nên đây là suy
+    luận có căn cứ, không phải đoán mò — và nó chỉ nói CÓ/KHÔNG, không bịa tên.
+    """
+    return (msg.get("payload", {}).get("mimeType") or "") == "multipart/mixed"
+
+
 def _to_email(msg: dict, folder: str = "inbox", ban_do_nhan: dict[str, str] | None = None) -> Email:
     name, addr = parseaddr(_header(msg, "From"))  # tách "Tên <email>" → (tên, email)
     to_name, to_addr = parseaddr(_header(msg, "To"))
@@ -176,6 +189,7 @@ def _to_email(msg: dict, folder: str = "inbox", ban_do_nhan: dict[str, str] | No
             or classify(addr, name, raw_subject, snippet).category)
     return Email(
         id=msg["id"],
+        hasAttachment=_co_dinh_kem(msg),
         sender=display,
         senderEmail=display_email,
         senderInitial=(display.lstrip("(")[:1].upper() or "?"),
@@ -438,6 +452,7 @@ def _to_email_day_du(msg: dict, ban_do_nhan: dict[str, str] | None = None) -> Em
         category=nhom.color,           # type: ignore[arg-type]
         label=nhom.label,              # nhãn khớp danh sách → mở chi tiết không "nhảy màu"
         attachments=([{"name": a["name"], "size": a["size"]} for a in attachments] or None),  # type: ignore[arg-type]
+        hasAttachment=bool(attachments),   # chi tiết BIẾT chắc, không phải suy từ mimeType
         html=(html or None),                  # HTML gốc để FE render đúng chuẩn Gmail
         folder=_folder_from_labels(labels),   # suy đúng thư mục từ nhãn (sent/drafts/trash/archive)
     )

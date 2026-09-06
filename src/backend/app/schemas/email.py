@@ -60,6 +60,11 @@ class Email(BaseModel):
     html: str | None = None                 # thân thư HTML gốc (để FE render đúng chuẩn Gmail);
                                             # None khi thư chỉ có text hoặc lấy từ store
     attachments: list[Attachment] | None = None
+    # CÓ tệp đính kèm hay không — TÁCH khỏi `attachments`, vì danh sách thư KHÔNG biết
+    # được tên tệp: Gmail ở `format=metadata` không trả `payload.parts` (đã đo trên thư
+    # thật). Nên dùng chung một trường thì danh sách buộc phải hoặc bịa tên, hoặc im
+    # lặng coi như không có tệp. Cả hai đều tệ hơn một lá cờ nói đúng sự thật mình biết.
+    hasAttachment: bool | None = None
     priority: Priority | None = None        # do AI gán; None = KHÔNG phải việc (không phải "việc nhẹ")
     status: TaskStatus | None = None        # đi kèm priority — có thì có cả hai, không thì cùng None
     tldr: str | None = None                 # tóm tắt do AI; ban đầu có thể trống

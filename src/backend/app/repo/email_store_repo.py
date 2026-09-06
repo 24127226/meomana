@@ -63,6 +63,7 @@ def _row_to_email(row: StoredEmail) -> Email:
         category=row.ai_category,          # type: ignore[arg-type]
         label=row.ai_label,
         attachments=atts,                  # type: ignore[arg-type]
+        hasAttachment=bool(row.has_attachment),
         priority=row.ai_priority,          # type: ignore[arg-type]
         status=row.ai_status,              # type: ignore[arg-type]
         tldr=row.ai_tldr,
@@ -109,6 +110,11 @@ def upsert(db: Session, user_id: int, provider: str, email: Email, *,
         row.gmail_labels = gmail_labels
     if email.attachments is not None:
         row.attachments_json = [a.model_dump() for a in email.attachments]
+        row.has_attachment = True
+    elif email.hasAttachment:
+        # Đường DANH SÁCH biết CÓ tệp nhưng không biết tên (Gmail `format=metadata`
+        # không trả `parts`). Vẫn phải ghi cờ, nếu không thì thư đồng bộ từ danh sách
+        # mất dấu kẹp giấy cho tới khi ai đó mở nó ra.
         row.has_attachment = True
     # Thân thư: chỉ ghi (và bật has_full) khi có bản ĐẦY ĐỦ; list chỉ cập nhật khi chưa có gì.
     if full:

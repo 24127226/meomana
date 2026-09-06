@@ -33,6 +33,9 @@ export type Email = {
   /** Thân thư HTML gốc (render đúng chuẩn Gmail ở màn chi tiết) — thiếu thì dùng body text. */
   html?: string | null
   attachments?: Attachment[]
+  /** CÓ tệp đính kèm hay không. Tách khỏi `attachments` vì danh sách thư biết CÓ nhưng
+   *  KHÔNG biết tên (Gmail `format=metadata` không trả `parts`). */
+  hasAttachment?: boolean
   /** AI Triage (UC015): action=cần bạn xử lý · waiting=đang đợi · fyi=để biết */
   priority?: Priority | null
   status?: TaskStatus | null

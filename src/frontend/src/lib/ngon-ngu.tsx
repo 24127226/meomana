@@ -313,6 +313,7 @@ const TU_DIEN: Record<string, { vi: string; en: string }> = {
     en: '“{tieuDe}” goes to Trash — still restorable, but it leaves your inbox.',
   },
   'mail.prioTitle': { vi: 'Độ ưu tiên: {muc}', en: 'Priority: {muc}' },
+  'mail.hasAttachment': { vi: 'Có tệp đính kèm', en: 'Has attachment' },
   'act.spam': { vi: 'Đánh dấu thư rác', en: 'Report spam' },
   'act.notSpam': { vi: 'Không phải thư rác', en: 'Not spam' },
   'toast.spam': { vi: 'Đã chuyển vào Thư rác', en: 'Moved to Spam' },
