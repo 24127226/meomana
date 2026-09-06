@@ -882,6 +882,33 @@ def get_email(email_id: str, token: str = Depends(get_gmail_token),
         raise
 
 
+@app.get("/emails/{email_id}/thread")
+def get_thread(email_id: str, token: str = Depends(get_gmail_token),
+               provider: str = Depends(get_provider),
+               session: AuthSession = Depends(get_current_session),
+               db: Session = Depends(get_db)):
+    """MỌI thư trong luồng của thư này, sắp CŨ → MỚI.
+
+    Danh sách đã gộp một cuộc trao đổi năm lượt thành MỘT dòng (đúng như Gmail). Nhưng
+    mở dòng đó ra thì trước đây chỉ thấy thư mới nhất — bốn lượt kia không có chỗ nào để
+    xem. Gộp mà không mở ra được thì tệ hơn không gộp: người dùng còn không biết mình
+    đang bị giấu thứ gì.
+
+    Nhận vào id của MỘT thư (đúng thứ giao diện đang cầm) rồi tự suy ra luồng của nó,
+    để phía giao diện không phải biết `threadId` có tồn tại hay không.
+    """
+    goc = mail.get_message(provider, token, email_id)
+    tid = getattr(goc, "threadId", None)
+    if not tid:
+        return {"items": [goc]}     # thư lẻ: chính nó là cả luồng
+    try:
+        ds = mail.get_thread(provider, token, tid)
+    except Exception:
+        logger.info("Không lấy được luồng %s — trả về thư lẻ", tid, exc_info=True)
+        return {"items": [goc]}     # hỏng khâu luồng thì vẫn phải đọc được thư đang mở
+    return {"items": ds or [goc]}
+
+
 @app.post("/emails/{email_id}/summarize")
 def summarize_email(email_id: str, token: str = Depends(get_gmail_token),
                     provider: str = Depends(get_provider)):

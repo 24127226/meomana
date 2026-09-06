@@ -313,6 +313,7 @@ const TU_DIEN: Record<string, { vi: string; en: string }> = {
     en: '“{tieuDe}” goes to Trash — still restorable, but it leaves your inbox.',
   },
   'mail.prioTitle': { vi: 'Độ ưu tiên: {muc}', en: 'Priority: {muc}' },
+  'det.threadEarlier': { vi: '{n} lượt trước đó trong cuộc trao đổi', en: '{n} earlier in this conversation' },
   'det.unstar': { vi: 'Bỏ quan trọng', en: 'Unmark important' },
   'det.star': { vi: 'Đánh dấu quan trọng', en: 'Mark important' },
   'det.status': { vi: 'Trạng thái', en: 'Status' },

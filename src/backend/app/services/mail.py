@@ -25,6 +25,13 @@ def get_message(provider: str, token: str, msg_id: str):
     return gmail_service.get_message(token, msg_id)
 
 
+def get_thread(provider: str, token: str, thread_id: str):
+    """Mọi thư trong một luồng hội thoại, sắp CŨ → MỚI."""
+    if _ms(provider):
+        return outlook_service.get_thread(token, thread_id)
+    return gmail_service.get_thread(token, thread_id)
+
+
 def send_email(provider: str, token: str, to, subject, body, cc=None, bcc=None, attachments=None):
     if _ms(provider):
         return outlook_service.send_email(token, to, subject, body, cc=cc, bcc=bcc)

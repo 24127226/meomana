@@ -75,6 +75,54 @@ const EMAILS_GOC: Email[] = [
       { name: 'Lich_nop_baocao.pdf', size: '96 KB' },
     ],
   },
+  /* ── MỘT CUỘC TRAO ĐỔI BA LƯỢT ─────────────────────────────────────────────
+     Bộ mock trước đây KHÔNG có luồng nào: mọi thư đều đứng lẻ. Nên phần gộp luồng
+     và màn xem cả cuộc trao đổi không bao giờ chạy khi xem thử — mà không thấy chạy
+     thì cũng không biết nó đúng hay sai. Ba lượt dưới đây dùng chung tiêu đề (khác
+     nhau tiền tố "Re:") để đúng cơ chế gom luồng của mock. */
+  {
+    id: '1b',
+    sender: 'Anh Quân',
+    senderEmail: 'meoarc.hcmus@gmail.com',
+    senderInitial: 'Q',
+    to: 'Phòng Giáo vụ <giaovu@fit.hcmus.edu.vn>',
+    subject: 'Re: Nhắc nộp báo cáo SRS — Nhóm 7',
+    preview: 'Dạ em xin xác nhận nhóm 7 sẽ nộp đúng hạn ạ...',
+    body: [
+      'Dạ em chào thầy/cô,',
+      'Em xin xác nhận Nhóm 7 sẽ nộp đúng hạn ạ. Cho em hỏi phần mockup giao diện có cần xuất riêng ra PDF không, hay để trong file Word là được ạ?',
+      'Em cảm ơn ạ.\nPhạm Trần Anh Quân — 24127226',
+    ],
+    time: '09:15',
+    date: 'Hôm nay, 09:15',
+    unread: false,
+    starred: false,
+    category: 'moss',
+    label: 'Học tập',
+    folder: 'sent',
+  },
+  {
+    id: '1c',
+    sender: 'Phòng Giáo vụ',
+    senderEmail: 'giaovu@fit.hcmus.edu.vn',
+    senderInitial: 'G',
+    to: ME,
+    subject: 'Re: Nhắc nộp báo cáo SRS — Nhóm 7',
+    preview: 'Để trong file Word là được em nhé...',
+    body: [
+      'Chào em,',
+      'Để trong file Word là được em nhé, không cần xuất riêng. Nhớ đánh số hình và có chú thích bên dưới mỗi mockup.',
+      'Trân trọng,\nPhòng Giáo vụ — Khoa CNTT, HCMUS',
+    ],
+    time: '09:40',
+    date: 'Hôm nay, 09:40',
+    unread: true,
+    starred: false,
+    category: 'moss',
+    label: 'Học tập',
+    priority: 'Medium',
+    status: 'Todo',
+  },
   {
     id: '2',
     sender: 'GitHub',

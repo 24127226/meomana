@@ -40,6 +40,7 @@ GMAIL_LIST = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 GMAIL_MSG = "https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}"
 # Tải nội dung 1 tệp đính kèm (Gmail tách riêng phần bytes nặng ra endpoint này).
 GMAIL_ATTACH = "https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}/attachments/{aid}"
+GMAIL_THREAD = "https://gmail.googleapis.com/gmail/v1/users/me/threads/{id}"
 # Đồng bộ lũy tiến + Push (Pub/Sub): profile cho historyId gốc, history.list cho thay đổi,
 # watch/stop để bật/tắt Gmail Push Notifications.
 GMAIL_PROFILE = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
@@ -399,20 +400,13 @@ def _extract_body(payload: dict) -> tuple[str, str, list[dict]]:
 
 
 @gmail_read_retry
-def get_message(access_token: str, msg_id: str) -> Email:
-    """Lấy 1 thư ĐẦY ĐỦ (thân thư + đính kèm) — dùng khi mở chi tiết."""
-    # CACHE: mở lại đúng thư này trong TTL → trả bản cũ, khỏi tải lại từ Gmail.
-    cache_key = ("msg", access_token, msg_id)
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+def _to_email_day_du(msg: dict, ban_do_nhan: dict[str, str] | None = None) -> Email:
+    """Thư ĐẦY ĐỦ từ Gmail (dict `format=full`) → Email.
 
-    headers = {"Authorization": f"Bearer {access_token}"}
-    with httpx.Client(timeout=15) as client:
-        r = client.get(GMAIL_MSG.format(id=msg_id), headers=headers, params={"format": "full"})
-        r.raise_for_status()
-        msg = r.json()
-
+    Tách khỏi `get_message` để `get_thread` dùng lại y hệt. Chép đoạn này sang chỗ khác
+    là mở đường cho hai màn hình nói hai điều khác nhau về cùng một lá thư — sửa một bên
+    thì bên kia lặng lẽ ở lại phiên bản cũ.
+    """
     text, html, attachments = _extract_body(msg.get("payload", {}))
     # Tách thành các đoạn (ngăn bởi dòng trống) cho FE hiển thị từng <p>.
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()] or [msg.get("snippet", "")]
@@ -425,10 +419,11 @@ def get_message(access_token: str, msg_id: str) -> Email:
     # Cùng luật với danh sách: NHÃN NGƯỜI DÙNG ĐÃ ĐẶT thắng bộ phân loại tự động.
     # Thiếu ở đây thì mở chi tiết một thư vừa gắn nhãn sẽ thấy nhãn CŨ, còn danh sách
     # thấy nhãn MỚI — hai màn nói hai điều khác nhau về cùng một lá thư.
-    nhom = (_nhan_nguoi_dung_dat(labels, _ban_do_nhan(access_token))
+    nhom = (_nhan_nguoi_dung_dat(labels, ban_do_nhan)
             or classify(addr, name, raw_subject, msg.get("snippet", "")).category)
-    email = Email(
+    return Email(
         id=msg["id"],
+        threadId=msg.get("threadId"),
         sender=sender,
         senderEmail=addr,
         senderInitial=(sender[:1].upper() or "?"),
@@ -446,8 +441,62 @@ def get_message(access_token: str, msg_id: str) -> Email:
         html=(html or None),                  # HTML gốc để FE render đúng chuẩn Gmail
         folder=_folder_from_labels(labels),   # suy đúng thư mục từ nhãn (sent/drafts/trash/archive)
     )
+
+
+def get_message(access_token: str, msg_id: str) -> Email:
+    """Lấy 1 thư ĐẦY ĐỦ (thân thư + đính kèm) — dùng khi mở chi tiết."""
+    # CACHE: mở lại đúng thư này trong TTL → trả bản cũ, khỏi tải lại từ Gmail.
+    cache_key = ("msg", access_token, msg_id)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    with httpx.Client(timeout=15) as client:
+        r = client.get(GMAIL_MSG.format(id=msg_id), headers=headers, params={"format": "full"})
+        r.raise_for_status()
+        msg = r.json()
+
+    email = _to_email_day_du(msg, _ban_do_nhan(access_token))
     _cache_set(cache_key, email)
     return email
+
+
+# ── Lấy CẢ LUỒNG hội thoại (UC004) ───────────────────────────────────
+def get_thread(access_token: str, thread_id: str) -> list[Email]:
+    """Mọi thư trong một luồng, sắp CŨ → MỚI (đúng thứ tự đọc một cuộc trao đổi).
+
+    ── VÌ SAO CẦN HÀM NÀY ──
+    Danh sách đã gộp luồng thành một dòng (`_gom_theo_luong`) — đúng như Gmail. Nhưng
+    mở dòng đó ra thì `get_message` chỉ trả về ĐÚNG MỘT thư, nên bốn lượt trao đổi
+    trước đó không có chỗ nào để xem. Gộp lại mà không mở ra được thì tệ hơn không gộp:
+    người dùng còn không biết là mình đang bị giấu thứ gì.
+
+    MỘT lượt gọi cho cả luồng (`threads.get?format=full`) chứ không lặp `get_message`
+    cho từng thư: một cuộc trao đổi mười lượt sẽ thành mười lượt gọi Gmail, chậm và ăn
+    hạn ngạch cho đúng thứ Gmail sẵn sàng trả trong một lần.
+    """
+    cache_key = ("thread", access_token, thread_id)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    with httpx.Client(timeout=20) as client:
+        r = client.get(GMAIL_THREAD.format(id=thread_id), headers=headers,
+                       params={"format": "full"})
+        r.raise_for_status()
+        data = r.json()
+
+    ban_do = _ban_do_nhan(access_token)
+    ds: list[Email] = []
+    for msg in data.get("messages", []):
+        try:
+            ds.append(_to_email_day_du(msg, ban_do))
+        except Exception as exc:      # một thư hỏng không được làm mất cả luồng
+            logger.warning("thread %s: bỏ qua thư %s (%s)", thread_id, msg.get("id"), exc)
+    _cache_set(cache_key, ds)
+    return ds
 
 
 # ── Tải 1 tệp đính kèm (UC004 — nút Download) ────────────────────────

@@ -68,6 +68,23 @@ export function EmailDetail({
 }) {
   const c = CATEGORY[email.category]
   const { theme } = useTheme()
+
+  /* ── LUỒNG HỘI THOẠI ──────────────────────────────────────────────────────
+     Nạp theo id thư đang mở; máy chủ tự suy ra luồng nên phía này không cần biết
+     `threadId` có tồn tại hay không. Hỏng thì để danh sách rỗng — khối luồng biến
+     mất, còn thư đang mở vẫn đọc được bình thường. Một tính năng phụ hỏng không
+     được kéo theo thứ người dùng vừa bấm vào. */
+  const [luong, setLuong] = useState<Email[]>([])
+  const [daMo, setDaMo] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let huy = false
+    setLuong([])
+    setDaMo(new Set())          // đổi thư thì đóng hết, không giữ trạng thái thư cũ
+    api.getThread(email.id).then((ds) => { if (!huy) setLuong(ds ?? []) }).catch(() => {})
+    return () => { huy = true }
+  }, [email.id])
+  // Bỏ chính thư đang mở ra khỏi danh sách "các lượt trước".
+  const truocDo = useMemo(() => luong.filter((m) => m.id !== email.id), [luong, email.id])
   const [labelOpen, setLabelOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showSummary, setShowSummary] = useState(true)
@@ -329,6 +346,69 @@ export function EmailDetail({
           <p className="mt-3 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             <span className="text-foreground/75">{t('mail.to')}</span> · {email.to}
           </p>
+
+          {/* ── CÁC LƯỢT TRƯỚC ĐÓ TRONG CÙNG CUỘC TRAO ĐỔI ──────────────────
+              Danh sách đã gộp một cuộc trao đổi nhiều lượt thành MỘT dòng, đúng như
+              Gmail. Nhưng mở ra thì trước đây chỉ thấy thư MỚI NHẤT — các lượt trước
+              không có chỗ nào để xem. Gộp mà không mở ra được thì tệ hơn không gộp:
+              người dùng còn không biết mình đang bị giấu thứ gì.
+
+              Thu gọn sẵn, không bung hết: mở một thư ra mà phải cuộn qua sáu lượt cũ
+              để tới nội dung mới nhất là đặt sai thứ tự ưu tiên — thứ người ta vừa
+              bấm vào phải nằm ngay trước mắt. */}
+          {truocDo.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {t('det.threadEarlier', { n: truocDo.length })}
+              </p>
+              {truocDo.map((m) => {
+                const mo = daMo.has(m.id)
+                return (
+                  <div key={m.id} className="goc-cat den-vien overflow-hidden" style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDaMo((tr) => {
+                          const s = new Set(tr)
+                          if (s.has(m.id)) s.delete(m.id)
+                          else s.add(m.id)
+                          return s
+                        })
+                      }
+                      aria-expanded={mo}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-foreground/[0.04]"
+                    >
+                      <SenderAvatar name={m.sender} email={m.senderEmail} size={22} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-foreground">
+                          {m.sender}
+                        </span>
+                        {!mo && (
+                          <span className="block truncate text-[12px] text-muted-foreground">
+                            {m.preview}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                        {m.time}
+                      </span>
+                      <ChevronDown
+                        className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform',
+                          mo && 'rotate-180')}
+                      />
+                    </button>
+                    {mo && (
+                      <div className="space-y-3 border-t border-border/60 px-3 py-3 text-[14px] leading-[1.7] text-foreground/90 [overflow-wrap:anywhere]">
+                        {cleanParagraphs(m.body).map((p, i) => (
+                          <p key={i} className="whitespace-pre-line">{renderRich(p)}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Vạch ngăn */}
           <div className="my-4 h-px bg-border/60" />

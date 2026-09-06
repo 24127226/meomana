@@ -157,6 +157,26 @@ def get_message(access_token: str, msg_id: str) -> Email:
     return _to_email(r.json(), "inbox", full=True)
 
 
+def get_thread(access_token: str, thread_id: str) -> list[Email]:
+    """Mọi thư trong một hội thoại, sắp CŨ → MỚI.
+
+    Graph không có "threads.get" như Gmail; luồng ở đây là các thư cùng `conversationId`.
+    Lọc theo nó trên TOÀN hộp thư (`/me/messages`) chứ không riêng Inbox — nếu không thì
+    thư MÌNH ĐÃ TRẢ LỜI (nằm ở Sent) biến mất khỏi cuộc trao đổi, và người đọc chỉ thấy
+    một nửa câu chuyện.
+    """
+    with httpx.Client(timeout=20) as c:
+        r = c.get(f"{GRAPH}/me/messages", headers=_hdr(access_token), params={
+            "$filter": f"conversationId eq '{thread_id}'",
+            "$orderby": "receivedDateTime asc",
+            "$top": 50,
+            "$expand": "attachments($select=name,size)",
+        })
+        r.raise_for_status()
+        ds = r.json().get("value", [])
+    return [_to_email(m, "inbox", full=True) for m in ds]
+
+
 def send_email(access_token: str, to: str, subject: str, body: str,
                cc=None, bcc=None, **_ignore) -> dict:
     def _recips(s):

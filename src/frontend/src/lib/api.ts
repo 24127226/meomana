@@ -152,6 +152,8 @@ export interface MeoArcApi {
   // Đọc & tìm — UC003/004/005
   listEmails(query?: EmailQuery): Promise<EmailListResult>
   getEmail(id: string): Promise<Email | null>
+  /** MỌI thư trong luồng của thư này, sắp CŨ → MỚI (UC004 — xem cả cuộc trao đổi). */
+  getThread(id: string): Promise<Email[]>
   markEmailRead(id: string, read: boolean): Promise<void>
   /** UC008 — tóm tắt 1 email bằng LLM → list gạch đầu dòng (thẻ 'Tóm tắt · AI'). Mock trả []. */
   summarizeEmail(id: string): Promise<string[]>
@@ -389,6 +391,16 @@ export function createMockApi(): MeoArcApi {
     async getEmail(id) {
       return seedEmails.find((e) => e.id === id) ?? null
     },
+    async getThread(id) {
+      // Mock gom luồng theo TIÊU ĐỀ đã bỏ tiền tố "Re:/Fwd:" — backend thật dùng
+      // threadId của nhà cung cấp, nhưng dữ liệu mẫu không có nên đây là cách gần
+      // đúng nhất mà vẫn cho thấy màn luồng chạy thật.
+      const goc = seedEmails.find((e) => e.id === id)
+      if (!goc) return []
+      const chuan = (x: string) => x.replace(/^((re|fwd|fw)\s*:\s*)+/i, '').trim().toLowerCase()
+      const khoa = chuan(goc.subject)
+      return seedEmails.filter((e) => chuan(e.subject) === khoa)
+    },
     async summarizeEmail() {
       return [] // mock: để email-detail tự dùng tóm tắt trích cục bộ
     },
@@ -559,6 +571,8 @@ export function createHttpApi(baseUrl: string): MeoArcApi {
 
     listEmails: (query = {}) => req<EmailListResult>(`/emails${qs(query)}`),
     getEmail: (id) => req<Email | null>(`/emails/${id}`),
+    getThread: (id) =>
+      req<{ items: Email[] }>(`/emails/${id}/thread`).then((r) => r?.items ?? []),
     summarizeEmail: async (id) =>
       (await post<{ points: string[] }>(`/emails/${id}/summarize`)).points,
     markEmailRead: (id, read) => post<void>(`/emails/${id}/read`, { read }),
