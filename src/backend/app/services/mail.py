@@ -48,12 +48,14 @@ def forward_email(provider: str, token: str, msg_id: str, to: str, note: str = "
 
 
 def reply_email(provider: str, token: str, msg_id: str, body: str, reply_all: bool = False,
-                html: str | None = None):
+                html: str | None = None, attachments: list[dict] | None = None):
     """Trả lời thư. `reply_all=True` gửi cho cả những người có mặt trong thư gốc.
     `html` là bản có định dạng, gửi KÈM bản chữ thuần chứ không thay."""
     if _ms(provider):
-        return outlook_service.reply_email(token, msg_id, body, reply_all=reply_all, html=html)
-    return gmail_send.reply_email(token, msg_id, body, reply_all=reply_all, html=html)
+        return outlook_service.reply_email(token, msg_id, body, reply_all=reply_all,
+                                           html=html, attachments=attachments)
+    return gmail_send.reply_email(token, msg_id, body, reply_all=reply_all, html=html,
+                                  attachments=attachments)
 
 
 def create_draft(provider: str, token: str, to, subject, body, cc=None, bcc=None, attachments=None):

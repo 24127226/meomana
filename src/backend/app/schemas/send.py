@@ -30,6 +30,9 @@ class ReplyReq(BaseModel):
     body: str
     replyAll: bool = False
     html: str | None = None
+    # Trả lời cũng phải đính kèm được. Thiếu trường này là tệp lên tới máy chủ rồi
+    # nằm im trong kho tạm, còn thư đi ra không mang gì.
+    attachmentIds: list[str] | None = None
 
 
 class SendResult(BaseModel):

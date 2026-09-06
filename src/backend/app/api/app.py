@@ -1158,31 +1158,40 @@ def download_attachment(email_id: str, name: str, token: str = Depends(get_gmail
     )
 
 
+def _lay_tep_dinh_kem(ids: list[str] | None) -> list[dict]:
+    """id tệp đã upload → nội dung thật (bytes). THIẾU TỆP THÌ TỪ CHỐI, không gửi im lặng.
+
+    Tách ra dùng chung cho CẢ gửi thư mới LẪN trả lời. Trước đây luật này chỉ nằm ở
+    đường gửi thư mới, còn đường trả lời không hề mang tệp — nên đính tệp vào thư trả
+    lời thì chip hiện ra bình thường mà người nhận không có gì. Đúng loại lỗi mà chính
+    ghi chú dưới đây đã cảnh báo, chỉ là ở một đường khác.
+
+    Một bức thư gửi thành công NHƯNG THIẾU thứ chính cần gửi thì tệ hơn một lỗi rõ ràng:
+    người gửi tin là xong và chỉ biết sự thật từ phía người nhận.
+    """
+    xin = list(ids or [])
+    tep = [
+        {"name": f["name"], "content": f["content"], "mime": f["mime"]}
+        for fid in xin
+        if (f := upload_store.get(fid))
+    ]
+    if len(tep) < len(xin):
+        raise HTTPException(
+            status_code=409,
+            detail=(f"{len(xin) - len(tep)} tệp đính kèm không còn trong kho tạm (kho "
+                    "giữ 30 phút và mất khi máy chủ khởi động lại). Thư CHƯA được gửi — "
+                    "bạn đính lại tệp rồi gửi giúp mình nhé."),
+        )
+    return tep
+
+
 # ── Nấc 6b: GỬI & TRẢ LỜI thư thật (UC010) ───────────────────────────
 @app.post("/emails/send", response_model=SendResult)
 def send_email_route(req: SendReq, bg: BackgroundTasks, token: str = Depends(get_gmail_token),
                      provider: str = Depends(get_provider),
                      session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
     """Soạn & gửi thư mới (kèm tệp — Gmail). Body khớp `SendEmailInput` + attachmentIds."""
-    # Đổi danh sách id tệp → nội dung thật (bytes) đã cất ở /uploads.
-    _xin = list(req.attachmentIds or [])
-    attachments = [
-        {"name": f["name"], "content": f["content"], "mime": f["mime"]}
-        for fid in _xin
-        if (f := upload_store.get(fid))
-    ]
-    # THIẾU TỆP THÌ TỪ CHỐI, KHÔNG GỬI IM LẶNG.
-    # Bản trước bỏ qua id tra không ra rồi vẫn gửi — và người dùng báo đúng triệu chứng
-    # sinh ra từ đó: "mail thì qua mà không có phần đính kèm", không lỗi, không dấu vết.
-    # Một bức thư gửi thành công NHƯNG THIẾU thứ chính cần gửi thì tệ hơn một lỗi rõ
-    # ràng: người gửi tin là xong và chỉ biết sự thật từ phía người nhận.
-    if len(attachments) < len(_xin):
-        raise HTTPException(
-            status_code=409,
-            detail=(f"{len(_xin) - len(attachments)} tệp đính kèm không còn trong kho "
-                    "tạm (kho giữ 30 phút và mất khi máy chủ khởi động lại). Thư CHƯA "
-                    "được gửi — bạn đính lại tệp rồi gửi giúp mình nhé."),
-        )
+    attachments = _lay_tep_dinh_kem(req.attachmentIds)
     res = _guard(lambda: mail.send_email(
         provider, token, req.to, req.subject, req.body, cc=req.cc, bcc=req.bcc,
         attachments=attachments, html=req.html,
@@ -1202,8 +1211,10 @@ def reply_email_route(email_id: str, req: ReplyReq, bg: BackgroundTasks,
                       provider: str = Depends(get_provider),
                       session: AuthSession = Depends(get_current_session), db: Session = Depends(get_db)):
     """Trả lời thư email_id: BE tự suy người nhận/tiêu đề/luồng từ thư gốc, chỉ cần `body`."""
+    tep = _lay_tep_dinh_kem(req.attachmentIds)
     res = _guard(lambda: mail.reply_email(provider, token, email_id, req.body,
-                                         reply_all=req.replyAll, html=req.html))
+                                          reply_all=req.replyAll, html=req.html,
+                                          attachments=tep))
     new_id = res.get("id", "")
     _record(db, session.user_id, action="reply_email", tool_name="reply_email",
             ids=[i for i in (email_id, new_id) if i], details={"reply_to": email_id},

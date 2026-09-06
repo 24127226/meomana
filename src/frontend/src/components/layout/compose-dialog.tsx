@@ -356,9 +356,13 @@ export function ComposeDialog() {
     setSending(true)
     setSendError(null)
     try {
+      // Danh sách tệp ĐÃ upload thành công (có id) — dùng chung cho cả hai đường gửi.
+      const tepIds = files.map((f) => f.id).filter((x): x is string => !!x)
       if (replyToId) {
         // Trả lời: BE tự suy người nhận/tiêu đề/luồng từ thư gốc.
-        await api.replyEmail(replyToId, body, replyAll, html)
+        // `tepIds` là chỗ bản trước THIẾU: tệp lên tới máy chủ, chip hiện ra bình
+        // thường, mà thư trả lời đi ra không mang gì cả.
+        await api.replyEmail(replyToId, body, replyAll, html, tepIds)
       } else {
         await api.sendEmail({
           to: to.trim(),
@@ -367,8 +371,7 @@ export function ComposeDialog() {
           subject,
           body,
           html,
-          // chỉ gửi các tệp ĐÃ upload thành công (có id); bỏ tệp fallback không id.
-          attachmentIds: files.map((f) => f.id).filter((x): x is string => !!x),
+          attachmentIds: tepIds,
         })
       }
       setStep('sent')

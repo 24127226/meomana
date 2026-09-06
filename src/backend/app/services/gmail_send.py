@@ -230,7 +230,7 @@ def _dia_chi_cua_toi(access_token: str) -> str:
 
 
 def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
-                html: str | None = None) -> dict:
+                html: str | None = None, attachments: list[dict] | None = None) -> dict:
     """TRẢ LỜI thư có id=msg_id: tự điền người nhận = người gửi gốc, tiêu đề "Re: …",
     và gắn các header In-Reply-To/References + threadId để Gmail XẾP vào đúng luồng."""
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -273,6 +273,7 @@ def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = Fal
 
     raw = _build_raw(
         to=from_addr, subject=subject, body=body, cc=cc, html=html,
+        attachments=attachments,
         extra_headers={"In-Reply-To": msg_ref, "References": references},
     )
     # threadId của thư gốc → bảo Gmail xếp thư trả lời vào CÙNG hội thoại.

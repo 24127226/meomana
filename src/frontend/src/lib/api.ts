@@ -182,7 +182,13 @@ export interface MeoArcApi {
   // Soạn & gửi — UC010
   sendEmail(input: SendEmailInput): Promise<{ id: string }>
   /** Trả lời 1 thư — BE tự suy người nhận/tiêu đề từ thư gốc, giữ đúng luồng. */
-  replyEmail(id: string, body: string, replyAll?: boolean, html?: string): Promise<{ id: string }>
+  replyEmail(
+    id: string,
+    body: string,
+    replyAll?: boolean,
+    html?: string,
+    attachmentIds?: string[],
+  ): Promise<{ id: string }>
   /** Chuyển tiếp thư sang địa chỉ khác, kèm lời nhắn. */
   forwardEmail(id: string, to: string, note?: string): Promise<{ id: string }>
   /** Upload 1 tệp đính kèm lên backend → trả metadata { id, name, size }. */
@@ -612,8 +618,8 @@ export function createHttpApi(baseUrl: string): MeoArcApi {
 
     sendEmail: (input) => post<{ id: string }>('/emails/send', input),
 
-    replyEmail: (id, body, replyAll = false, html = '') =>
-      post<{ id: string }>(`/emails/${id}/reply`, { body, replyAll, html }),
+    replyEmail: (id, body, replyAll = false, html = '', attachmentIds = []) =>
+      post<{ id: string }>(`/emails/${id}/reply`, { body, replyAll, html, attachmentIds }),
     forwardEmail: (id, to, note = '') =>
       post<{ id: string }>(`/emails/${id}/forward`, { to, note }),
 

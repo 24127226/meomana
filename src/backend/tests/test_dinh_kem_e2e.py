@@ -177,3 +177,67 @@ def test_hop_thoai_soan_thu_cung_dinh_duoc_tep(app_client, monkeypatch):
     assert r.status_code == 200, r.text
     assert ghi.get("attachments"), "Soạn thư gửi đi mà không kèm tệp"
     assert ghi["attachments"][0]["name"] == "anh.png"
+
+
+# ── /emails/{id}/reply: đường TRẢ LỜI — chỗ vừa hỏng ─────────────────────────
+
+def test_TRA_LOI_cung_dinh_duoc_tep(app_client, monkeypatch):
+    """Người dùng báo: đính tệp vào thư trả lời thì chip hiện bình thường mà bên nhận
+    không có gì.
+
+    Đúng vậy: đường trả lời KHÔNG hề mang tệp. Giao diện không gửi `attachmentIds`,
+    `ReplyReq` không có trường đó, và `gmail_send.reply_email` không nhận tham số nào
+    cho tệp. Tệp lên tới máy chủ rồi nằm im trong kho tạm.
+
+    Đây đúng là lỗi mà chú thích đầu file này đã cảnh báo — "sửa đúng một đường rồi
+    tưởng xong" — chỉ là lần này ở đường trả lời.
+    """
+    c, _ = app_client
+    ghi: dict = {}
+
+    def gia(provider, token, msg_id, body, **kw):
+        ghi.update(msg_id=msg_id, body=body, attachments=kw.get("attachments"))
+        return {"id": "m9", "threadId": "t9"}
+
+    import app.api.app as app_mod
+    monkeypatch.setattr(app_mod.mail, "reply_email", gia)
+
+    fid = c.post("/uploads", files={"file": ("bang-diem.pdf", b"%PDF diem",
+                                             "application/pdf")}).json()["id"]
+    r = c.post("/emails/goc123/reply",
+               json={"body": "Dạ em gửi ạ", "attachmentIds": [fid]})
+    assert r.status_code == 200, r.text
+    assert ghi.get("attachments"), "THƯ TRẢ LỜI ĐI MÀ KHÔNG CÓ TỆP — đúng lỗi được báo"
+    assert ghi["attachments"][0]["name"] == "bang-diem.pdf"
+    assert ghi["attachments"][0]["content"] == b"%PDF diem"
+
+
+def test_TRA_LOI_thieu_tep_thi_TU_CHOI_chu_khong_gui_im_lang(app_client, monkeypatch):
+    """Luật này vốn chỉ có ở đường gửi thư mới. Tách ra dùng chung nên trả lời cũng
+    phải theo: thư gửi thành công NHƯNG THIẾU thứ chính cần gửi thì tệ hơn một lỗi rõ
+    ràng — người gửi tin là xong và chỉ biết sự thật từ phía người nhận."""
+    c, _ = app_client
+    da_goi = []
+
+    import app.api.app as app_mod
+    monkeypatch.setattr(app_mod.mail, "reply_email",
+                        lambda *a, **k: da_goi.append(1) or {"id": "x", "threadId": "y"})
+
+    r = c.post("/emails/goc123/reply",
+               json={"body": "Gửi kèm nhé", "attachmentIds": ["id-khong-ton-tai"]})
+    assert r.status_code == 409
+    assert da_goi == [], "phải TỪ CHỐI, tuyệt đối không gửi một bức thư thiếu tệp"
+
+
+def test_TRA_LOI_khong_co_tep_thi_van_binh_thuong(app_client, monkeypatch):
+    """Đường phổ biến nhất không được vì tính năng này mà đổi hành vi."""
+    c, _ = app_client
+    ghi: dict = {}
+
+    import app.api.app as app_mod
+    monkeypatch.setattr(app_mod.mail, "reply_email",
+                        lambda p, t, i, b, **kw: ghi.update(attachments=kw.get("attachments"))
+                        or {"id": "m1", "threadId": "t1"})
+
+    assert c.post("/emails/goc123/reply", json={"body": "ok"}).status_code == 200
+    assert not ghi.get("attachments")

@@ -219,17 +219,53 @@ def create_draft(access_token: str, to, subject: str, body: str,
 
 
 def reply_email(access_token: str, msg_id: str, body: str, reply_all: bool = False,
-                html: str | None = None, **_ignore) -> dict:
+                html: str | None = None, attachments: list[dict] | None = None,
+                **_ignore) -> dict:
     """Trả lời thư. `reply_all=True` dùng endpoint /replyAll của Graph — nó tự dựng danh
-    sách người nhận, nên không phải tự lọc trùng/loại mình như bản Gmail."""
-    duong = "replyAll" if reply_all else "reply"
-    with httpx.Client(timeout=15) as c:
-        # Graph nhận `comment` là chuỗi; gửi thẳng HTML vào đó thì Outlook hiện đúng
-        # định dạng. Không có HTML thì giữ chữ thuần như cũ.
-        r = c.post(f"{GRAPH}/me/messages/{msg_id}/{duong}",
-                   headers=_hdr(access_token), json={"comment": (html or body)})
+    sách người nhận, nên không phải tự lọc trùng/loại mình như bản Gmail.
+
+    ── HAI ĐƯỜNG, VÌ GRAPH KHÔNG CHO ĐÍNH TỆP QUA /reply ──
+    `/reply` chỉ nhận `comment` là chuỗi. Muốn kèm tệp thì phải đi đường dài: tạo NHÁP
+    trả lời → đặt thân thư → đính từng tệp → gửi nháp đó. Bốn lượt gọi thay vì một.
+    Nên chỉ đi đường dài KHI CÓ TỆP; không có tệp thì giữ nguyên đường một-lượt đang
+    chạy tốt, khỏi đánh đổi độ tin cậy của trường hợp phổ biến nhất.
+    """
+    import base64
+
+    if not attachments:
+        duong = "replyAll" if reply_all else "reply"
+        with httpx.Client(timeout=15) as c:
+            # Graph nhận `comment` là chuỗi; gửi thẳng HTML vào đó thì Outlook hiện đúng
+            # định dạng. Không có HTML thì giữ chữ thuần như cũ.
+            r = c.post(f"{GRAPH}/me/messages/{msg_id}/{duong}",
+                       headers=_hdr(access_token), json={"comment": (html or body)})
+            r.raise_for_status()
+        return {"id": "", "threadId": ""}
+
+    tao = "createReplyAll" if reply_all else "createReply"
+    with httpx.Client(timeout=30) as c:
+        r = c.post(f"{GRAPH}/me/messages/{msg_id}/{tao}", headers=_hdr(access_token))
         r.raise_for_status()
-    return {"id": "", "threadId": ""}
+        nhap = r.json()
+        nid = nhap["id"]
+
+        than = ({"contentType": "HTML", "content": html} if html and html.strip()
+                else {"contentType": "Text", "content": body})
+        c.patch(f"{GRAPH}/me/messages/{nid}", headers=_hdr(access_token),
+                json={"body": than}).raise_for_status()
+
+        for a in attachments:
+            c.post(
+                f"{GRAPH}/me/messages/{nid}/attachments", headers=_hdr(access_token),
+                json={
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    "name": a["name"],
+                    "contentBytes": base64.b64encode(a["content"]).decode(),
+                },
+            ).raise_for_status()
+
+        c.post(f"{GRAPH}/me/messages/{nid}/send", headers=_hdr(access_token)).raise_for_status()
+    return {"id": nid, "threadId": nhap.get("conversationId", "")}
 
 
 def forward_email(access_token: str, msg_id: str, to: str, note: str = "") -> dict:
