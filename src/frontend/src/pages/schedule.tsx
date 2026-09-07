@@ -20,6 +20,17 @@ import { t } from '@/lib/ngon-ngu'
 import { chuyenCanh } from '@/lib/chuyen-canh'
 import { TraCuuPanel } from '@/components/layout/tra-cuu-panel'
 
+/** Số TRANG (mỗi trang tối đa 50 thư) cuốn lịch chịu khó quét để tìm cam kết.
+ *
+ *  6 × 50 = 300 thư. Con số này là một sự ĐÁNH ĐỔI, không phải một giới hạn kỹ
+ *  thuật: quét càng sâu càng ít bỏ sót hạn, nhưng mỗi trang là một lời gọi Gmail
+ *  và trang lịch chỉ mở ra sau khi cuốn xong. 300 phủ được vài tháng thư của một
+ *  sinh viên mà vẫn giữ thời gian mở trang ở mức chấp nhận được.
+ *
+ *  Sửa con số này là đổi cả hai đầu — nhớ đo lại thời gian mở trang, đừng chỉ
+ *  nhìn xem có thêm việc hiện ra hay không. */
+const SO_TRANG_QUET = 6
+
 /**
  * SchedulePage — trang lịch trình.
  *
@@ -70,21 +81,45 @@ export function SchedulePage() {
 
   useEffect(() => {
     if (!apiBaseUrlDaCauHinh) return
-    // XIN ĐÚNG SỐ THƯ AGENT QUÉT. Mặc định của API là 30, còn các tool lịch trình quét
-    // nhiều hơn — nên trợ lý tìm ra cam kết trong lá thứ 45 mà cuốn lịch chưa bao giờ
-    // tải về. Người dùng thấy AI nhắc một việc rồi mở lịch không có nó.
-    //
-    // ⚠️ 50 chứ KHÔNG PHẢI 60: API chặn `limit` ở MAX_PAGE_SIZE=50. Xin 60 thì FastAPI
-    // trả 422, `.catch` bên dưới nuốt lỗi, và cuốn lịch TRỐNG TRƠN — im lặng hoàn toàn.
-    // Đã vấp đúng lỗi đó. Hằng số dùng chung nằm ở backend: limits.QUET_LICH_TRINH.
-    api.listEmails({ folder: 'inbox', limit: 50 })
-      .then((r) => setEmails(r.items))
-      // KHÔNG nuốt lỗi trong im lặng nữa: lịch rỗng vì hỏng và lịch rỗng vì không có
-      // việc trông y hệt nhau, nên lần trước mất rất lâu mới lần ra.
-      .catch((e) => {
+    let huy = false
+
+    /* ── PHẢI PHÂN TRANG, KHÔNG XIN MỘT PHÁT ────────────────────────────────
+       API chặn `limit` ở MAX_PAGE_SIZE=50 (xin 60 thì FastAPI trả 422, `.catch`
+       nuốt lỗi, và cuốn lịch TRỐNG TRƠN — đã vấp đúng lỗi đó). Nên một lời gọi
+       tối đa được 50 thư.
+
+       50 nghe nhiều, cho tới khi hộp thư vượt qua nó. Đây là lỗi ĐÃ XẢY RA THẬT:
+       thêm 13 thư demo vào hộp thư thì 13 thư CŨ NHẤT rơi ra khỏi cửa sổ 50 thư
+       mới nhất, và mọi cam kết trích từ chúng BIẾN MẤT khỏi lịch. Thư vẫn nằm
+       nguyên trong hộp thư, chỉ là cuốn lịch không còn nhìn tới.
+
+       Kiểu hỏng này im lặng đúng cái kiểu tệ nhất: lịch vẫn vẽ đẹp, vẫn có việc,
+       chỉ THIẾU — mà thiếu thì không có dấu hiệu gì để nhận ra. Người dùng chỉ
+       phát hiện khi tình cờ nhớ ra một hạn đáng lẽ phải có ở đó.
+
+       Nên: cuốn theo con trỏ cho tới hết, có TRẦN CỨNG. Trần tồn tại vì hộp thư
+       vài nghìn thư thì cuốn hết là hàng chục lời gọi Gmail và một trang treo —
+       thà quét thiếu ở lá thứ 301 còn hơn không mở nổi trang. */
+    void (async () => {
+      try {
+        const gom: Email[] = []
+        let cursor: string | undefined
+        for (let trang = 0; trang < SO_TRANG_QUET; trang++) {
+          const r = await api.listEmails({ folder: 'inbox', limit: 50, cursor })
+          gom.push(...r.items)
+          cursor = r.nextCursor ?? undefined
+          if (!cursor || r.items.length === 0) break   // hết thư → dừng sớm
+        }
+        if (!huy) setEmails(gom)
+      } catch (e) {
+        // KHÔNG nuốt lỗi trong im lặng: lịch rỗng vì hỏng và lịch rỗng vì không
+        // có việc trông y hệt nhau, nên lần trước mất rất lâu mới lần ra.
         console.error('[lịch] không tải được thư:', e)
-        setLoiTai(true)
-      })
+        if (!huy) setLoiTai(true)
+      }
+    })()
+
+    return () => { huy = true }
   }, [])
 
   const camKet = useMemo(() => trichCamKet(emails), [emails])
