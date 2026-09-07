@@ -188,7 +188,13 @@ def forward_email(access_token: str, msg_id: str, to: str, note: str = "") -> di
     khoi.append(than or goc.get("snippet", ""))
 
     noi_dung = (f"{note.strip()}\n\n" if note.strip() else "") + "\n".join(khoi)
-    return _post_send(access_token, _build_raw(to=to, subject=subject, body=noi_dung))
+    ra = _post_send(access_token, _build_raw(to=to, subject=subject, body=noi_dung))
+    # NÓI RA TÊN CÁC TỆP ĐÃ BỊ BỎ LẠI. Thân thư trích dẫn đã ghi cho NGƯỜI NHẬN biết,
+    # nhưng NGƯỜI GỬI thì không: họ bấm chuyển tiếp, thấy "đã chuyển tiếp", và tin là
+    # tệp đã đi. Trả tên tệp lên đây để tầng trên nói đúng sự thật thay vì báo thành
+    # công trơn tru — đúng loại hỏng im lặng đã gặp một lần với thư trả lời.
+    ra["tep_bo_lai"] = [a["name"] for a in dinh_kem]
+    return ra
 
 
 def cc_tra_loi_tat_ca(to_goc: str, cc_goc: str, nguoi_gui: str, toi: str) -> list[str] | None:

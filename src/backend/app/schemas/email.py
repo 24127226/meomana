@@ -47,6 +47,13 @@ class Email(BaseModel):
     senderInitial: str      # 1 ký tự cho avatar tròn
     to: str                 # người nhận (hiển thị)
     subject: str
+    # ĐỒNG GỬI. Có thật trong thư nhưng trước đây bị bỏ ở mọi tầng, nên cả giao diện
+    # lẫn agent đều không biết một lá thư gửi cho những ai. Hậu quả cụ thể: agent không
+    # phân biệt nổi thư riêng với thư gửi cả nhóm, nên không biết khi nào "trả lời tất
+    # cả" mới là đúng — mà đó chính là lúc trả lời riêng gây hiểu nhầm nhiều nhất.
+    # Giữ dạng CHUỖI thô như `to` để khớp đúng hình dạng header; nơi nào cần danh sách
+    # thì tự tách, đừng tách sẵn ở đây rồi hai bên hiểu khác nhau.
+    cc: str | None = None
     preview: str            # 1 dòng snippet
     body: list[str]         # các đoạn văn; mỗi phần tử = 1 đoạn <p> bên FE
     time: str               # nhãn ngắn ở danh sách, vd "08:42"

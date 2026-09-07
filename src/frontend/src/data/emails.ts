@@ -21,6 +21,9 @@ export type Email = {
   senderEmail: string
   senderInitial: string
   to: string
+  /** ĐỒNG GỬI. Quyết định "Trả lời tất cả" có nghĩa hay không: một thư `to` chỉ mình
+   *  mình nhưng `cc` ba người thì đó là thư gửi cả nhóm, và trả lời riêng là sai. */
+  cc?: string | null
   subject: string
   preview: string
   body: string[]

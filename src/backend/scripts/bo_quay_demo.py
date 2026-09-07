@@ -585,41 +585,41 @@ def bo_prompt(moc: datetime | None = None) -> list[tuple[str, str, str]]:
         ),
         # "ai là người mình trao đổi nhiều nhất về đồ án" — ba lá cùng một người.
         (
-            "Trần Minh Khoa",
-            "Phần backend nhóm 7 — mình push nhánh feat/mcp rồi nhé",
+            "Nguyễn Chí Tài",
+            "Mình đẩy nhánh feat/mcp lên rồi nhé",
             "Ê Quân,\n\n"
             "Mình vừa push nhánh feat/mcp lên rồi, bạn kéo về xem giúp phần đăng ký tool "
             "nhé. Mình có tách riêng phần xác thực ra file khác cho dễ đọc.\n\n"
-            "Còn phần tài liệu kiến trúc thì mình chưa đụng, bạn với Mai chia nhau nha.\n\n"
-            "Khoa",
+            "Còn phần tài liệu kiến trúc thì mình chưa đụng, mình với Thiên chia nhau nha.\n\n"
+            "Tài",
         ),
         (
-            "Trần Minh Khoa",
+            "Nguyễn Chí Tài",
             "Vướng chỗ phân trang khi gọi Gmail",
             "Quân ơi,\n\n"
             "Mình vướng chỗ phân trang khi gọi Gmail: lấy quá 30 thư một lần là chậm hẳn. "
             "Bạn xem giúp mình có nên cache lại không, hay cứ để gọi thẳng?\n\n"
             "Tối nay mình rảnh từ 8h, gọi bàn nhanh được không?\n\n"
-            "Khoa",
+            "Tài",
         ),
         (
-            "Trần Minh Khoa",
-            "Slide bảo vệ — mình làm xong phần kiến trúc rồi",
+            "Nguyễn Chí Tài",
+            "Slide bảo vệ — mình làm xong phần của mình rồi",
             "Quân,\n\n"
-            "Mình làm xong 6 slide phần kiến trúc, để trong Drive chung. Bạn xem rồi góp "
+            "Mình làm xong 6 slide phần của mình, để trong Drive chung. Bạn xem rồi góp "
             "ý giúp mình trước tối mai nhé, để còn kịp sửa.\n\n"
             "Phần demo thì bạn chạy hay mình chạy? Mình nghĩ bạn chạy sẽ hợp hơn vì bạn "
             "nắm phần giao diện.\n\n"
-            "Khoa",
+            "Tài",
         ),
         (
-            "Lê Thị Mai",
-            "Mình gửi phần kiểm thử nhóm 7",
+            "Phan Quang Tiến",
+            "Mình gửi phần mình phụ trách",
             "Chào Quân,\n\n"
-            "Mình viết xong phần kiểm thử cho ba use case chính rồi. Độ phủ hiện tại "
+            "Mình viết xong phần mình phụ trách cho ba use case chính rồi. Độ phủ hiện tại "
             "khoảng 68%, mình đang bổ sung thêm cho nhánh xử lý lỗi.\n\n"
-            "Bạn nhắc Khoa gửi mình phần backend cuối cùng để mình kiểm nốt nhé.\n\n"
-            "Mai",
+            "Bạn nhắc Tài gửi mình bản cuối để mình kiểm nốt nhé.\n\n"
+            "Tiến",
         ),
         # "sáng nay có gì gấp không" — một việc GẤP THẬT, hạn ngay trong ngày.
         (
@@ -648,5 +648,379 @@ def bo_prompt(moc: datetime | None = None) -> list[tuple[str, str, str]]:
             "Chiều nay đi cà phê không",
             "Quân ơi rảnh chiều nay không, đi cà phê chỗ cũ đi. Mình có chuyện muốn kể.\n\n"
             "Trang",
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VÒNG LÀM GIÀU THỨ HAI — gieo đúng những thứ hộp thư hiện tại KHÔNG CÓ
+# ══════════════════════════════════════════════════════════════════════════════
+# Bộ `bo_prompt` ở trên dựng ngược từ câu hỏi, và nó làm lộ ra hai lỗ hổng thật. Nhưng
+# nó vẫn chỉ gieo THƯ TRƠN: không lá nào có tệp đính kèm, không lá nào có Cc, và cả hộp
+# thư chỉ có ĐÚNG MỘT luồng hội thoại.
+#
+# Hệ quả — bốn tính năng đã viết xong mà KHÔNG CÓ GÌ để demo:
+#
+#   1. TỆP ĐÍNH KÈM. Không một lá nào trong hộp thư có tệp. Câu Q33 ("thư nào có file
+#      đính kèm mà mình chưa đọc") vẫn "chạy đúng" vì nó trả về rỗng — một câu hỏi
+#      xanh mà không chứng minh được gì. Chip đính kèm, nút tải, và bản vá "tóm tắt
+#      thư làm mất tệp" đều không có chỗ nào để nhìn thấy.
+#
+#   2. TRẢ LỜI TẤT CẢ. Mọi thư demo đều tự gửi cho chính mình, không Cc ai. Mà thiếu
+#      Cc thì `reply_all=True` và `reply_all=False` cho ra ĐÚNG MỘT kết quả giống
+#      nhau — tính năng chạy đúng mà nhìn không khác gì, tức không demo được.
+#
+#   3. ĐÍNH KÈM NẰM Ở LƯỢT CŨ CỦA LUỒNG. Đây đúng là lỗi đã gặp thật ("xem lại hội
+#      thoại thì không thấy tệp"). Luồng Giáo vụ không có tệp nên bản vá đó không có
+#      chỗ chứng minh.
+#
+#   4. TÌM THEO NGHĨA. Mọi thư đều dùng đúng từ khoá của việc nó nói tới, nên tìm
+#      chuỗi thường là đủ — `semantic_search` không bao giờ hơn được `search_emails`.
+#
+# ── NGUYÊN TẮC KHI THÊM: KHÔNG PHÁ CÁI ĐANG ĐÚNG ──
+# Không lá nào dưới đây được tạo thêm một CAM KẾT có hạn vào ngày mới. Lý do ở đầu
+# file: "ngày quá tải" tính bằng tổng phút của các việc cùng hạn một ngày, nên chỉ cần
+# vài việc mới rơi vào ngày khác là ngày đó cũng đỏ, và câu "tuần này ngày nào bận
+# nhất" hết chỉ được vào đâu. Chỗ nào buộc phải có hạn thì gắn vào ĐÚNG ngày đỉnh đã
+# có sẵn (d(1)), không mở ngày mới.
+
+
+def _pdf(tieu_de: str, dong: list[str]) -> bytes:
+    """Dựng một PDF MỘT TRANG hợp lệ, không cần thư viện ngoài.
+
+    Máy này không có reportlab/fpdf, và cài thêm một gói chỉ để sinh tệp demo là đổi
+    môi trường chạy của cả backend ngay trước buổi bảo vệ — không đáng.
+
+    CHỮ PHẢI KHÔNG DẤU: font Helvetica chuẩn của PDF dùng bảng mã WinAnsi, không có ký
+    tự tiếng Việt. Viết có dấu vào đây thì lúc mở tệp ra chữ vỡ — tệ hơn hẳn so với
+    việc chấp nhận không dấu. TÊN TỆP thì vẫn để tiếng Việt được, vì tên tệp đi trong
+    header MIME chứ không qua font.
+    """
+    def esc(s: str) -> str:
+        return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+    lenh = ["BT", "/F1 15 Tf", "60 780 Td", "20 TL", f"({esc(tieu_de)}) Tj", "T*",
+            "/F1 11 Tf"]
+    for d in dong:
+        lenh += [f"({esc(d)}) Tj", "T*"]
+    lenh.append("ET")
+    than = "\n".join(lenh).encode("latin-1", "replace")
+
+    objs = [
+        b"<</Type/Catalog/Pages 2 0 R>>",
+        b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]"
+        b"/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>",
+        b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+        b"<</Length %d>>stream\n" % len(than) + than + b"\nendstream",
+    ]
+    ra = bytearray(b"%PDF-1.4\n")
+    vi_tri: list[int] = []
+    for i, o in enumerate(objs, 1):
+        vi_tri.append(len(ra))
+        ra += b"%d 0 obj" % i + o + b"endobj\n"
+    xref = len(ra)
+    ra += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for v in vi_tri:
+        ra += b"%010d 00000 n \n" % v
+    ra += b"trailer<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objs) + 1, xref)
+    return bytes(ra)
+
+
+def _tep(ten: str, noi_dung: bytes, mime: str) -> dict:
+    return {"name": ten, "content": noi_dung, "mime": mime}
+
+
+def _csv(dong: list[str]) -> str:
+    """CSV kèm BOM UTF-8 — thiếu BOM thì Excel trên Windows mở ra chữ Việt vỡ hết."""
+    return "\ufeff" + "\r\n".join(dong) + "\r\n"
+
+
+def _csv_bytes(dong: list[str]) -> bytes:
+    return _csv(dong).encode("utf-8")
+
+
+def bo_lam_giau_2(moc: datetime | None = None) -> list[tuple]:
+    """Trả (tên người gửi, tiêu đề, thân thư, cc_alias, tệp đính kèm).
+
+    `cc_alias` là danh sách HẬU TỐ, ví dụ ["tai", "tien"]. Kịch bản gửi sẽ đổi thành
+    địa chỉ cộng của CHÍNH tài khoản đang đăng nhập: `quan+tai@gmail.com`.
+
+    ── VÌ SAO DÙNG ĐỊA CHỈ CỘNG, KHÔNG DÙNG ĐỊA CHỈ THẬT CỦA BẠN BÈ ──
+    Muốn demo "trả lời tất cả" thì thư gốc BẮT BUỘC phải có Cc thật — không thì
+    reply_all không có gì để mà gửi thêm. Nhưng Cc vào hộp thư thật của người khác
+    nghĩa là mỗi lần bấm "Trả lời tất cả" lúc tập dượt là ba người thật nhận được một
+    lá thư demo. Địa chỉ cộng của Gmail giải quyết trọn: nó là địa chỉ HỢP LỆ, hiện
+    đúng trong header Cc, gửi tới được — nhưng mọi thứ đều rơi lại vào chính hộp thư
+    này. Demo thật, không phiền ai.
+    """
+    n = moc or _moc()
+
+    def d(k: int) -> str:
+        return (n + timedelta(days=k)).strftime("%d/%m")
+
+    pdf_pa3 = _tep(
+        "Nhom07_PA3_Testing_ban-nhap.pdf",
+        _pdf("NHOM 7 - BAO CAO KIEM THU (PA3) - BAN NHAP", [
+            "", "1. Ke hoach kiem thu", "   - Pham vi: 9 use case da dang ky",
+            "   - Muc tieu do phu nhanh: 80%", "",
+            "2. Ket qua chay thuc te",
+            "   - Backend : 821 ca dat / 21 ca co y bo qua",
+            "   - Frontend:  70 ca dat", "",
+            "3. Phan chua phu", "   - Nhanh loi cua tang goi mo hinh",
+            "   - Duong MCP qua HTTP (moi bo sung)", "",
+            "GHI CHU: ban nhap, chua ra soat lai muc 3.",
+        ]),
+        "application/pdf")
+
+    csv_phan_cong = _tep(
+        "Bang_phan_cong_Nhom7.csv",
+        _csv_bytes([
+            "Thành viên,MSSV,Phần phụ trách,Tình trạng,Độ phủ",
+            "Nguyễn Chí Tài,24127xxx,MCP server + đặc tả tool,Đang làm,71%",
+            "Phạm Trần Anh Quân,24127226,Giao diện + màn Lịch trình,Xong,84%",
+            "Phan Quang Tiến,24127xxx,Kiểm thử tự động,Đang làm,68%",
+            "Nguyễn Ngọc Thiên,24127xxx,Tài liệu SRS + Design,Xong,—",
+        ]),
+        "text/csv")
+
+    return [
+        # ══════════════════════════════════════════════════════════════════════
+        # NHÓM 1 — CÓ TỆP ĐÍNH KÈM  (hộp thư hiện tại có ĐÚNG 0 lá như vậy)
+        # → "thư nào có đính kèm mà mình chưa đọc", "gửi lại mình file bảng phân công"
+        # ══════════════════════════════════════════════════════════════════════
+        (
+            "Nguyễn Chí Tài",
+            "Bản nháp báo cáo PA3 — bạn xem giúp mục 3",
+            "Quân ơi,\n\n"
+            "Mình gửi bản nháp báo cáo PA3, bạn xem giúp mình mục 3 (phần chưa phủ). "
+            "Mình ghi hơi thẳng, không biết có nên để nguyên vậy không.\n\n"
+            "Phần số liệu mình lấy từ lần chạy tối qua, nếu bạn chạy lại mà lệch thì "
+            "báo mình sửa.\n\n"
+            "Tài",
+            [], [pdf_pa3],
+        ),
+        (
+            "Phan Quang Tiến",
+            "Bảng phân công và độ phủ — bản mới nhất",
+            "Chào Quân,\n\n"
+            "Mình cập nhật lại bảng phân công kèm độ phủ từng phần, gửi bạn xem.\n\n"
+            "Phần của mình lên được 68% rồi. Cột tình trạng mình để 'Đang làm' cho hai "
+            "người chưa xong, bạn thấy sai chỗ nào thì sửa thẳng vào tệp nhé.\n\n"
+            "Tiến",
+            [], [csv_phan_cong],
+        ),
+        (
+            "Phòng Giáo vụ FIT",
+            "Mẫu bìa báo cáo và hướng dẫn định dạng",
+            "Chào các em,\n\n"
+            "Giáo vụ gửi kèm mẫu bìa báo cáo và bản hướng dẫn định dạng. Các nhóm dùng "
+            "đúng mẫu này, nhóm nào tự chế bìa sẽ được yêu cầu nộp lại.\n\n"
+            "Hai tệp đi kèm là bản chính thức, thay cho mọi bản đã phát trước đó.\n\n"
+            "Phòng Giáo vụ — Khoa CNTT",
+            [],
+            [
+                _tep("Mau_bia_bao_cao.pdf",
+                     _pdf("MAU BIA BAO CAO DO AN", [
+                         "", "TRUONG DAI HOC KHOA HOC TU NHIEN",
+                         "KHOA CONG NGHE THONG TIN", "",
+                         "BAO CAO DO AN MON HOC", "NHAP MON CONG NGHE PHAN MEM", "",
+                         "De tai: . . . . . . . . . . . . . . . . . . . .",
+                         "Nhom  : . . . .    Lop: . . . .", "",
+                         "Giang vien huong dan: . . . . . . . . . .",
+                     ]),
+                     "application/pdf"),
+                _tep("huong-dan-dinh-dang.txt",
+                     ("HƯỚNG DẪN ĐỊNH DẠNG BÁO CÁO\r\n"
+                      "===========================\r\n\r\n"
+                      "- Khổ giấy A4, lề trái 3cm, các lề còn lại 2cm\r\n"
+                      "- Font Times New Roman 13, giãn dòng 1.5\r\n"
+                      "- Đánh số trang ở giữa chân trang\r\n"
+                      "- Mục lục tự động, không gõ tay\r\n"
+                      "- Hình và bảng đều phải có chú thích và được nhắc trong bài\r\n"
+                      "- Tài liệu tham khảo theo IEEE\r\n\r\n"
+                      "Nộp DUY NHẤT bản PDF. Phụ lục mã nguồn chỉ cần đường dẫn kho mã.\r\n"
+                      ).encode("utf-8"),
+                     "text/plain"),
+            ],
+        ),
+        (
+            "Nguyễn Ngọc Thiên",
+            "Log lỗi lúc chạy thử demo tối qua",
+            "Quân ơi,\n\n"
+            "Tối qua mình chạy thử bản trên Azure thì thấy có mấy dòng lạ trong log, "
+            "mình cắt phần liên quan gửi bạn xem.\n\n"
+            "Không chặn gì cả, app vẫn chạy, nhưng mình sợ lúc bảo vệ thầy mở log ra "
+            "hỏi thì mình không giải thích được.\n\n"
+            "Thiên",
+            [],
+            [_tep("loi-chay-thu.log",
+                  ("2026-09-06 21:14:02 INFO  app.api      GET /emails?folder=inbox 200 118ms\r\n"
+                   "2026-09-06 21:14:03 INFO  app.agent    tool=search_emails args={'query':'is:unread'}\r\n"
+                   "2026-09-06 21:14:07 WARN  app.llm      khoa #3 tra 429, chuyen sang khoa #4\r\n"
+                   "2026-09-06 21:14:09 INFO  app.llm      gemini-2.5-flash-lite ok (2 lan thu)\r\n"
+                   "2026-09-06 21:15:41 WARN  app.sync     lich su Gmail nhay 218 -> 224, bo qua 3 su kien 'updated'\r\n"
+                   "2026-09-06 21:16:02 INFO  app.mcp      phien stdio moi, uid=1, 16 cong cu\r\n"
+                   "2026-09-06 21:16:30 INFO  app.api      POST /emails/actions/delete -> can duyet\r\n"
+                   ).encode("utf-8"),
+                  "text/plain")],
+        ),
+
+        # ══════════════════════════════════════════════════════════════════════
+        # NHÓM 2 — CÓ Cc  → đây là điều kiện DUY NHẤT để "trả lời tất cả" khác
+        #                    "trả lời" khi nhìn bằng mắt
+        # ══════════════════════════════════════════════════════════════════════
+        (
+            "GVHD Nguyễn Văn Sơn",
+            "Góp ý slide bảo vệ — gửi chung cả nhóm",
+            "Chào các em,\n\n"
+            "Thầy xem qua slide nhóm gửi. Thầy góp ý ba chỗ:\n\n"
+            "1. Phần mở đầu còn dài. Hội đồng đã đọc đề cương rồi, các em vào thẳng "
+            "chỗ nhóm giải quyết được vấn đề mà cách làm thường không giải quyết được.\n\n"
+            "2. Slide kiến trúc chữ nhỏ quá, chiếu lên không đọc được. Em phóng to "
+            "hoặc tách làm hai.\n\n"
+            "3. Phần demo em nhớ chuẩn bị bản quay sẵn, phòng khi mạng phòng hội đồng "
+            "chậm. Năm ngoái có nhóm mất gần năm phút chỉ để chờ đăng nhập.\n\n"
+            "Em nào sửa phần nào thì trả lời cho cả nhóm cùng biết, đừng trả lời riêng "
+            "thầy — thầy không nắm được ai làm gì.\n\n"
+            "GVHD",
+            ["tai", "tien", "thien"], [],
+        ),
+        (
+            "Phan Quang Tiến",
+            "Chốt giúp mình ai chạy phần demo nào",
+            "Cả nhóm ơi,\n\n"
+            "Mai bảo vệ rồi, mình nghĩ nên chốt luôn ai chạy phần nào để khỏi giẫm chân "
+            "nhau trên máy.\n\n"
+            "Ý mình: Quân chạy phần giao diện và cổng duyệt, Tài chạy phần MCP trong "
+            "terminal, mình với Thiên đứng phần báo cáo.\n\n"
+            "Mọi người thấy sao thì trả lời cho cả nhóm nhé.\n\n"
+            "Tiến",
+            ["tai", "thien"], [],
+        ),
+        (
+            "Ban tổ chức Hackathon",
+            f"Nhắc lịch buổi kỹ thuật {d(4)} — gửi tới đội trưởng và thành viên",
+            "Chào đội MeoArc,\n\n"
+            f"Buổi kiểm tra kỹ thuật diễn ra {d(4)}. Ban tổ chức gửi thư này tới đội "
+            "trưởng, đồng gửi các thành viên đã đăng ký.\n\n"
+            "Đội chỉ cần một người có mặt. Các bạn tự thống nhất rồi phản hồi lại cho "
+            "cả đội cùng biết.\n\n"
+            "Ban tổ chức",
+            ["tai"], [],
+        ),
+
+        # ══════════════════════════════════════════════════════════════════════
+        # NHÓM 3 — TÌM THEO NGHĨA, không theo TỪ KHOÁ
+        # Hai lá này cố ý KHÔNG chứa từ khoá của việc chúng nói tới. Tìm chuỗi
+        # thường sẽ trượt; đây là chỗ `semantic_search` hơn `search_emails`.
+        # ══════════════════════════════════════════════════════════════════════
+        (
+            "Phạm Thu Trang",
+            "chỗ up bài đổi rồi nha",
+            "Quân ơi,\n\n"
+            "Cái trang mình hay bỏ bài lên ấy, giờ khoa chuyển qua cổng mới rồi, đường "
+            "cũ vẫn vào được nhưng không ai chấm nữa đâu.\n\n"
+            "Mình bị hụt một lần rồi nên nhắc bạn. Bạn hỏi lại lớp trưởng cho chắc.\n\n"
+            "Trang",
+            [], [],
+        ),
+        (
+            "Nguyễn Ngọc Thiên",
+            "cái hôm bữa mình nói đó",
+            "Quân,\n\n"
+            "Cái chỗ mà máy nó dừng lại hỏi mình trước khi làm gì đó ấy — mình nghĩ nên "
+            "cho vào báo cáo, vì mấy nhóm khác để nó tự làm luôn.\n\n"
+            "Mình chưa biết viết vào chương mấy, bạn xem giúp.\n\n"
+            "Thiên",
+            [], [],
+        ),
+
+        # ══════════════════════════════════════════════════════════════════════
+        # NHÓM 4 — MỘT LÁ ĐỂ ĐÁNH DẤU RÁC
+        # Thư lừa đảo "Ngan hang ACB Online" đang là BẰNG CHỨNG cho câu Q42. Đánh
+        # dấu rác chính nó thì nó rời hộp thư và câu đó hỏng. Nên cần một lá riêng,
+        # rõ ràng là rác quảng cáo nhưng KHÔNG mang dấu hiệu lừa đảo, để hai câu
+        # không giẫm lên nhau.
+        # ══════════════════════════════════════════════════════════════════════
+        (
+            "Trung tam Ngoai ngu Quoc te",
+            "TANG 100% hoc phi khoa giao tiep - chi con hom nay",
+            "Chao ban,\n\n"
+            "Trung tam dang co chuong trinh TANG 100% hoc phi khoa giao tiep cho 50 "
+            "ban dang ky som nhat.\n\n"
+            "Dang ky ngay de nhan uu dai. Lien he hotline de duoc tu van mien phi.\n\n"
+            "Trung tam Ngoai ngu Quoc te",
+            [], [],
+        ),
+    ]
+
+
+def luong_dac_ta_mcp(moc: datetime | None = None) -> list[tuple]:
+    """Luồng THỨ HAI, ba lượt, và TỆP NẰM Ở LƯỢT ĐẦU.
+
+    Trả (tên người gửi, tiêu đề, thân thư, tệp đính kèm).
+
+    ── VÌ SAO PHẢI CÓ LUỒNG NÀY ──
+    Luồng Giáo vụ đã chứng minh được "đọc cả luồng thì thấy yêu cầu bị đổi". Nhưng nó
+    không chứng minh được thứ hai: TỆP ĐÍNH KÈM CỦA LƯỢT CŨ CÓ CÒN THẤY KHÔNG. Đó đúng
+    là lỗi đã gặp thật — mở lại hội thoại thì phần đính kèm biến mất. Sửa xong mà không
+    có dữ liệu nào tái hiện được thì bản sửa đó không có gì bảo vệ nó.
+
+    Luồng này dựng đúng hình dạng gây lỗi: tệp ở lượt 1, hai lượt sau không có tệp, và
+    lượt cuối phủ định một phần lượt đầu — nên muốn trả lời đúng thì phải đọc CẢ BA.
+    """
+    return [
+        (
+            "Nguyễn Chí Tài",
+            "Đặc tả tool MCP — bản 1",
+            "Quân ơi,\n\n"
+            "Mình gửi bản đặc tả tool MCP đầu tiên, có đủ 16 tool. Mỗi tool mình ghi "
+            "bốn thứ như bạn dặn: tham số bắt buộc, giá trị trả về, hình dạng lỗi, và "
+            "tool đó có gây hậu quả ra ngoài hay không.\n\n"
+            "Bạn xem giúp phần đặt tên tham số, mình sợ còn lệch quy ước.\n\n"
+            "Tài",
+            [_tep("dac-ta-tool-mcp-v1.pdf",
+                  _pdf("DAC TA TOOL MCP - BAN 1", [
+                      "", "Tong cong: 16 tool phoi qua MCP", "",
+                      "Nhom DOC (khong hau qua):",
+                      "  search_emails, get_email, get_thread, list_labels,",
+                      "  semantic_search, liet_ke_cam_ket, ap_luc_lich_trinh", "",
+                      "Nhom GHI (PHAI qua cong xac nhan):",
+                      "  send_email, reply_email, forward_email, bulk_action,",
+                      "  apply_labels, categorize_emails", "",
+                      "Nhom TRA CUU ngoai:",
+                      "  tim_chuyen_bay, tim_khach_san, de_xuat_di_lai", "",
+                      "GHI CHU: hai cong cu CO Y khong phoi qua MCP",
+                      "  (dat cho mo phong, tu choi ngoai pham vi).",
+                  ]),
+                  "application/pdf")],
+        ),
+        (
+            "Anh Quân",
+            "Re: Đặc tả tool MCP — bản 1",
+            "Tài ơi,\n\n"
+            "Mình xem rồi. Phần nhóm ĐỌC thì ổn.\n\n"
+            "Nhưng mình thắc mắc chỗ `categorize_emails` — bạn xếp nó vào nhóm GHI, mà "
+            "phân loại thì có sửa gì trong hộp thư đâu? Nếu nó chỉ đọc rồi trả về nhãn "
+            "thì đâu cần qua cổng xác nhận.\n\n"
+            "Quân",
+            [],
+        ),
+        (
+            "Nguyễn Chí Tài",
+            "Re: Đặc tả tool MCP — bản 1",
+            "Đúng rồi, mình nhầm.\n\n"
+            "SỬA LẠI hai chỗ so với tệp mình gửi ở thư đầu:\n\n"
+            "1. `categorize_emails` chuyển sang nhóm ĐỌC — nó chỉ trả về nhãn gợi ý, "
+            "không ghi gì. Chỉ khi người dùng bấm áp dụng thì mới gọi `apply_labels`, "
+            "và CHÍNH `apply_labels` mới là cái phải qua cổng.\n\n"
+            "2. `forward_email` mình ghi thiếu: nó KHÔNG mang theo tệp đính kèm. Cái "
+            "này phải ghi rõ trong đặc tả, không thì người dùng tưởng có.\n\n"
+            "Bạn cứ dùng tệp bản 1 nhưng nhớ hai chỗ sửa này, mình chưa kịp xuất lại "
+            "bản 2.\n\n"
+            "Tài",
+            [],
         ),
     ]

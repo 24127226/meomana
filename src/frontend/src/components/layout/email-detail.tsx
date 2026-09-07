@@ -112,9 +112,15 @@ export function EmailDetail({
   const [fwdTo, setFwdTo] = useState('')
   const [fwdNote, setFwdNote] = useState('')
   const [dangGui, setDangGui] = useState(false)
-  /* Thư có nhiều người nhận thì "Trả lời tất cả" mới có nghĩa. `to` là chuỗi người nhận
-     do nhà cung cấp trả về; nhiều địa chỉ thì ngăn bằng dấu phẩy. */
-  const coNhieuNguoiNhan = (email.to || '').split(',').filter((x) => x.trim()).length > 1
+  /* Thư có nhiều người nhận thì "Trả lời tất cả" mới có nghĩa. `to` và `cc` là chuỗi
+     người nhận do nhà cung cấp trả về; nhiều địa chỉ thì ngăn bằng dấu phẩy.
+
+     PHẢI ĐẾM CẢ Cc. Bản trước chỉ đếm `to`, mà hình dạng phổ biến nhất của một thư
+     gửi cả nhóm lại là `to` MỘT người (mình) và `cc` những người còn lại — thầy gửi
+     cho lớp trưởng, cc cả nhóm. Đúng lúc "Trả lời tất cả" cần thiết nhất thì nút đó
+     không hiện, và người dùng trả lời riêng mà không biết mình đang trả lời riêng. */
+  const coNhieuNguoiNhan =
+    `${email.to || ''},${email.cc || ''}`.split(',').filter((x) => x.trim()).length > 1
   const [labelOpen, setLabelOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showSummary, setShowSummary] = useState(true)
@@ -394,10 +400,18 @@ export function EmailDetail({
             </div>
           </div>
 
-          {/* Người nhận */}
+          {/* Người nhận — và ĐỒNG GỬI khi có.
+              Không hiện Cc thì người dùng không có cách nào biết thư này gửi cho cả
+              nhóm, nên cũng không có cơ sở để chọn giữa "Trả lời" và "Trả lời tất cả".
+              Chỉ hiện khi CÓ, để thư riêng không mọc thêm một dòng trống. */}
           <p className="mt-3 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             <span className="text-foreground/75">{t('mail.to')}</span> · {email.to}
           </p>
+          {email.cc?.trim() ? (
+            <p className="mt-1 break-words text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="text-foreground/75">Đồng gửi</span> · {email.cc}
+            </p>
+          ) : null}
 
           {/* ── CÁC LƯỢT TRƯỚC ĐÓ TRONG CÙNG CUỘC TRAO ĐỔI ──────────────────
               Danh sách đã gộp một cuộc trao đổi nhiều lượt thành MỘT dòng, đúng như

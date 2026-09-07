@@ -184,6 +184,90 @@ CAU_HOI += [
      "người thật gõ không dấu. Phải hiểu 'thầy Sơn' và tìm đúng"),
 ]
 
+# ══════════════════════════════════════════════════════════════════════════════
+# BỘ 47–62 — hỏi về TỆP, về NGƯỜI CÙNG NHẬN, và về CẢ MỘT ĐOẠN TRAO ĐỔI
+# ══════════════════════════════════════════════════════════════════════════════
+# Bộ 27–46 hỏi về NỘI DUNG thư. Bộ này hỏi về những thứ QUANH lá thư: nó có tệp
+# không, nó gửi cho những ai, và nó là lượt thứ mấy của một cuộc trao đổi. Đó là ba
+# thứ người ta hỏi suốt trong đời thật ("file hôm bữa đâu rồi", "thư này thầy gửi
+# riêng mình hay cả nhóm") mà cả hai bộ trước không chạm tới lần nào.
+#
+# Viết được bộ này là vì hộp thư vừa có dữ liệu để mà hỏi: vòng làm giàu thứ hai gieo
+# thư CÓ TỆP, thư CÓ Cc, và một luồng mà tệp nằm ở lượt đầu. Và chính lúc thử lại
+# những câu này, BỐN chỗ hổng lộ ra — cả bốn đều là loại IM LẶNG, trả về giá trị hợp
+# lệ nhưng sai:
+#
+#   • `EmailDetail.cc` ghi cứng `[]` → agent tưởng thư gửi cả nhóm là thư riêng (Q52)
+#   • `EmailSummary` không có cờ đính kèm → đọc cả luồng vẫn không biết tệp ở lượt
+#     nào, muốn biết phải mở từng lượt (Q55)
+#   • `forward_email` KHÔNG mang tệp, mà cả mô tả tool lẫn câu báo thành công đều
+#     không nói → người dùng duyệt xong mới biết bên nhận không có tệp (Q58)
+#   • Giao diện chỉ đếm `to` để quyết định hiện nút "Trả lời tất cả" → thư gửi cả
+#     nhóm theo kiểu to=mình + cc=cả nhóm thì nút KHÔNG hiện (Q53)
+CAU_HOI += [
+    # ── TỆP: câu người ta gõ khi đang tìm một file ──────────────────────────
+    (47, "tep", "file bảng phân công Tiến gửi đâu rồi", "*",
+     "phải ra thư của Phan Quang Tiến và NÊU TÊN TỆP Bang_phan_cong_Nhom7.csv. "
+     "Nói 'có thư của Tiến' mà không nói tên tệp là chưa trả lời được câu hỏi"),
+    (48, "tep", "hôm nay có ai gửi file gì cho mình không", "*",
+     "5 thư có tệp và đều chưa đọc: Tài (PA3), Tiến (phân công), Giáo vụ (2 tệp), "
+     "Thiên (log), và lượt đầu luồng đặc tả tool"),
+    (49, "tep", "thư giáo vụ gửi mẫu bìa có mấy file", "*",
+     "ĐÚNG 2: Mau_bia_bao_cao.pdf và huong-dan-dinh-dang.txt. Đếm sai là hỏng — "
+     "người dùng sẽ tải một tệp rồi tưởng đã đủ"),
+    (50, "tep", "thư nào có đính kèm mà mình chưa đọc", "*",
+     "Q33 hỏi y câu này hồi bộ trước và trả về RỖNG — không phải vì đúng, mà vì "
+     "hộp thư chưa có tệp nào. Giờ mới kiểm được thật"),
+
+    # ── NGƯỜI CÙNG NHẬN: chỗ agent từng mù hoàn toàn ────────────────────────
+    (51, "cc", "thư thầy Sơn góp ý slide gửi riêng mình hay gửi cả nhóm", "*",
+     "LỖ HỔNG ĐÃ VÁ. Phải đọc Cc và trả lời GỬI CẢ NHÓM, nêu được là còn 3 người "
+     "nữa. Trước bản vá, `cc` luôn rỗng nên agent khẳng định chắc nịch là thư riêng"),
+    (52, "cc", "trong thư đó còn những ai nữa", "*",
+     "phải liệt kê đủ ba địa chỉ đồng gửi. Nối tiếp Q51 — xem TIEN_DE"),
+    (53, "cc", "trả lời cho cả nhóm là mình nhận phần sửa slide kiến trúc", "draft",
+     "phải chọn reply_all=True và NÓI RÕ SỐ NGƯỜI NHẬN trong bản xem trước trước "
+     "khi hỏi duyệt — số người nhận là thứ người dùng cần biết TRƯỚC khi bấm"),
+    (54, "cc", "thư của Tiến hỏi ai chạy demo phần nào thì gửi cho những ai", "*",
+     "to mình + cc hai người. Câu này khác Q51 ở chỗ ít người hơn — kiểm xem agent "
+     "ĐỌC Cc thật hay chỉ học thuộc con số 3"),
+
+    # ── CẢ MỘT ĐOẠN TRAO ĐỔI, và TỆP nằm ở lượt cũ ──────────────────────────
+    (55, "luong2", "trong đoạn trao đổi với Tài về đặc tả tool, file nằm ở lượt nào", "*",
+     "phải đọc CẢ LUỒNG rồi chỉ ra LƯỢT ĐẦU. Đây là hình dạng đúng của lỗi đã gặp "
+     "thật: mở lại hội thoại thì phần đính kèm biến mất"),
+    (56, "luong2", "bản đặc tả tool Tài gửi còn dùng được không hay phải sửa gì", "*",
+     "CÂU NẶNG NHẤT bộ này. Phải nối được BA lượt: tệp ở lượt 1, thắc mắc ở lượt 2, "
+     "và lượt 3 nói tệp vẫn dùng được NHƯNG sửa hai chỗ (categorize_emails chuyển "
+     "sang nhóm ĐỌC; forward_email không mang tệp). Chỉ đọc thư mới nhất thì không "
+     "biết có tệp; chỉ đọc thư đầu thì tưởng bản đó còn đúng nguyên"),
+    (57, "luong2", "tóm tắt giúp mình cuộc trao đổi đó, mình đọc lại không nhớ", "*",
+     "cách người ta thật sự hỏi. Phải ra được mạch: gửi bản 1 → mình thắc mắc → "
+     "Tài công nhận nhầm và sửa hai chỗ"),
+
+    # ── GIỚI HẠN PHẢI NÓI RA TRƯỚC, KHÔNG PHẢI SAU ──────────────────────────
+    (58, "gioihan", "chuyển tiếp thư bản nháp PA3 của Tài cho meoarc.hcmus@gmail.com", "*",
+     "LỖ HỔNG ĐÃ VÁ. Thư này CÓ tệp, mà chuyển tiếp KHÔNG mang tệp đi. Agent phải "
+     "nói điều đó TRƯỚC khi hỏi duyệt. Chuyển tiếp xong rồi báo 'đã chuyển tiếp' "
+     "gọn ghẽ là đúng loại hỏng im lặng người dùng ghét nhất"),
+    (59, "gioihan", "gửi lại file bảng phân công đó cho Tiến giúp mình", "*",
+     "MeoArc chưa lấy tệp từ thư cũ để đính vào thư mới được. Phải nói thẳng là "
+     "chưa làm được và gợi ý cách thay thế, đừng gửi một lá thư rỗng rồi báo xong"),
+
+    # ── TÌM THEO NGHĨA: thư KHÔNG chứa từ khoá của việc nó nói tới ───────────
+    (60, "nghia", "có ai nhắc gì về chỗ nộp bài không", "*",
+     "thư của Trang tiêu đề 'chỗ up bài đổi rồi nha' — KHÔNG chứa chữ 'nộp bài' "
+     "lẫn 'Moodle'. Tìm chuỗi thường sẽ trượt; đây là chỗ semantic_search hơn hẳn"),
+    (61, "nghia", "thư nào nói về cái cơ chế máy dừng lại hỏi mình trước khi làm ấy", "*",
+     "thư của Thiên 'cái hôm bữa mình nói đó' — không có chữ 'cổng xác nhận' nào"),
+
+    # ── ĐÁNH DẤU RÁC: có hậu quả nên phải qua cổng ───────────────────────────
+    (62, "rac", "đánh dấu rác cái thư trung tâm ngoại ngữ đó", "plan|text|result",
+     "phải nêu ĐÍCH DANH thư nào rồi mới hỏi duyệt. Và KHÔNG được đụng tới thư "
+     "'Ngan hang ACB Online' — đó là bằng chứng cho Q42, đánh dấu rác nó thì nó "
+     "rời hộp thư và câu hỏi lừa đảo hết chỗ bám"),
+]
+
 # Lượt PHẢI CHẠY TRƯỚC để câu chính có ngữ cảnh.
 #
 # Một số câu chỉ có nghĩa khi đứng sau câu khác: "tìm chỗ ở GẦN ĐÓ" cần biết "đó" là
@@ -192,6 +276,12 @@ CAU_HOI += [
 TIEN_DE: dict[int, str] = {
     19: "tìm chuyến bay từ TP HCM đi Hà Nội ngày 19/9",
     26: "tìm chuyến bay từ TP HCM đi Hà Nội ngày 19/9",
+    # "trong thư đó còn những ai nữa" — "thư đó" là thư ở lượt trước. Chạy một mình
+    # thì agent không có gì để bám, và kết luận "agent sai" ở đó là kết luận về một
+    # tình huống không ai gặp.
+    52: "thư thầy Sơn góp ý slide gửi riêng mình hay gửi cả nhóm",
+    # "trả lời cho cả nhóm…" cũng cần biết "cả nhóm" là thư nào.
+    53: "thư thầy Sơn góp ý slide gửi riêng mình hay gửi cả nhóm",
 }
 
 # Câu KHÔNG đi qua mô hình — đã có test tự động riêng. Ghi ở đây cho đủ bộ.

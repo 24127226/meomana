@@ -442,6 +442,7 @@ def _to_email_day_du(msg: dict, ban_do_nhan: dict[str, str] | None = None) -> Em
         senderEmail=addr,
         senderInitial=(sender[:1].upper() or "?"),
         to=_header(msg, "To"),
+        cc=(_header(msg, "Cc") or None),
         subject=raw_subject or "(không tiêu đề)",
         preview=msg.get("snippet", ""),
         body=paragraphs,

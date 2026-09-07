@@ -86,6 +86,11 @@ def _to_summary(e: Email) -> EmailSummary:
         date=_parse_dt(e.date),
         snippet=e.preview,
         is_read=not e.unread,
+        # `hasAttachment` là None khi nguồn không nói được (thư lấy từ store cũ), và
+        # None KHÔNG phải "không có tệp". Ép về False ở đây là chọn cách nói dối ít
+        # hại hơn: agent bỏ sót một tệp thì người dùng hỏi lại, còn agent khẳng định có
+        # tệp mà thật ra không có thì người dùng đi tìm một thứ không tồn tại.
+        has_attachment=bool(e.hasAttachment),
         labels=(["STARRED"] if e.starred else []),
         category=None,                        # TODO: map màu moss/sea… → EmailCategory enum
     )
@@ -209,7 +214,15 @@ async def get_email(inp: GetEmailInput, ctx: RequestContext) -> GetEmailOutput:
         subject=e.subject,
         body_text="\n\n".join(e.body),
         attachments=[a.name for a in (e.attachments or [])],
-        cc=[], bcc=[],
+        # Cc PHẢI đi kèm nội dung. Trước đây chỗ này ghi cứng `[]` — một chỗ trống chưa
+        # ai điền, và nó im lặng: agent đọc thư "thầy gửi chung cả nhóm" mà vẫn tưởng
+        # là thư riêng, nên chọn trả lời riêng và ba người kia không bao giờ biết.
+        # Tách bằng dấu phẩy vì đó là hình dạng của header; bỏ phần rỗng do dấu phẩy thừa.
+        cc=[p.strip() for p in (e.cc or "").split(",") if p.strip()],
+        # `bcc` thì KHÔNG điền được và cũng không nên: người nhận một thư BCC không thấy
+        # được danh sách BCC — đó là điểm mấu chốt của BCC. Để rỗng ở đây là đúng sự
+        # thật, không phải chỗ trống bỏ quên như `cc` vừa rồi.
+        bcc=[],
     )
     return GetEmailOutput(success=True, message="Đã lấy nội dung thư.", data=detail)
 
@@ -332,6 +345,10 @@ async def reply_email(inp: ReplyEmailInput, ctx: RequestContext) -> ReplyEmailOu
 async def forward_email(inp: ForwardEmailInput, ctx: RequestContext) -> ForwardEmailOutput:
     """CHUYỂN TIẾP một thư sang địa chỉ khác, kèm lời nhắn.
 
+    KHÔNG MANG THEO TỆP ĐÍNH KÈM — chỉ chuyển nội dung chữ, có ghi tên tệp trong phần
+    trích dẫn. Nếu thư gốc có tệp thì PHẢI nói trước cho người dùng biết điều này, đừng
+    để họ duyệt xong mới phát hiện bên nhận không có tệp.
+
     Xếp WRITE_DESTRUCTIVE nên đi qua cổng xác nhận như gửi/trả lời: thư đi rồi thì người
     nhận đã thấy, không rút lại được. Và ở đây rủi ro còn RIÊNG một kiểu — chuyển tiếp là
     đưa nội dung của NGƯỜI KHÁC cho người thứ ba, nên gửi nhầm địa chỉ là làm lộ thư của
@@ -341,9 +358,18 @@ async def forward_email(inp: ForwardEmailInput, ctx: RequestContext) -> ForwardE
         mail.forward_email, ctx.email_provider, ctx.access_token,
         inp.email_id, inp.to, inp.note,
     )
+    # Câu báo thành công phải NÓI ĐÚNG chuyện đã xảy ra. "Đã chuyển tiếp thư" cho một
+    # thư có tệp là câu đúng một nửa, và nửa thiếu chính là nửa người dùng quan tâm.
+    bo_lai = res.get("tep_bo_lai") or []
+    loi = f"Đã chuyển tiếp thư tới {inp.to}."
+    if bo_lai:
+        loi += (f" LƯU Ý: {len(bo_lai)} tệp KHÔNG đi kèm ({', '.join(bo_lai)}) — "
+                "chuyển tiếp chỉ mang nội dung chữ. Muốn người nhận có tệp thì phải "
+                "tải về rồi soạn thư mới đính lại.")
     return ForwardEmailOutput(
-        success=True, message=f"Đã chuyển tiếp thư tới {inp.to}.",
-        data={"message_id": res.get("id", ""), "thread_id": res.get("threadId", "")},
+        success=True, message=loi,
+        data={"message_id": res.get("id", ""), "thread_id": res.get("threadId", ""),
+              "tep_bo_lai": ", ".join(bo_lai)},
     )
 
 

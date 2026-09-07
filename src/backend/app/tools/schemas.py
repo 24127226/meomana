@@ -71,6 +71,13 @@ class EmailSummary(BaseModel):
     date: datetime
     snippet: str        # Xem trước 200 từ
     is_read: bool
+    # CÓ TỆP ĐÍNH KÈM HAY KHÔNG. Chỉ một lá cờ, nhưng thiếu nó thì agent đọc cả một
+    # cuộc trao đổi mà không biết tệp nằm ở lượt nào — muốn biết phải gọi get_email cho
+    # TỪNG lượt, tức mỗi câu hỏi về tệp tốn thêm n lời gọi Gmail. Đây là hình dạng câu
+    # hỏi rất thật: "file bạn gửi hôm trước nằm ở đâu trong đoạn chat này".
+    # KHÔNG mang tên tệp, vì danh sách thư lấy ở `format=metadata` KHÔNG có `payload.parts`
+    # (đã đo trên thư thật) — chỉ suy được CÓ hay KHÔNG. Muốn tên thì gọi get_email.
+    has_attachment: bool = False
     labels: list[str] = []
     category: EmailCategory | None = None
     priority: EmailPriority | None = None

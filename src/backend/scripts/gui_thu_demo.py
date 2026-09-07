@@ -601,6 +601,97 @@ def _dung_bo_day() -> list[tuple[str, str, str]]:
     return ra
 
 
+def _dia_chi_cong(email: str, hau_to: str) -> str:
+    """`quan@gmail.com` + `tai` → `quan+tai@gmail.com`.
+
+    Gmail giao mọi thư gửi tới địa chỉ cộng về CHÍNH hộp thư gốc. Nhờ vậy thư demo có
+    header Cc THẬT — điều kiện bắt buộc để "trả lời tất cả" khác "trả lời" — mà không
+    một người thật nào nhận được thư tập dượt.
+    """
+    ten, _, mien = email.partition("@")
+    return f"{ten}+{hau_to}@{mien}"
+
+
+def _lam_giau_2(token: str, tai_khoan: str, nguoi_nhan: str, gui_that: bool) -> int:
+    """Gửi bộ làm giàu vòng hai: thư có tệp/có Cc, rồi luồng ba lượt có tệp ở lượt đầu."""
+    from bo_quay_demo import bo_lam_giau_2, luong_dac_ta_mcp
+
+    bo = bo_lam_giau_2()
+    luong = luong_dac_ta_mcp()
+
+    print(f"Tài khoản : {tai_khoan}")
+    print(f"Gửi tới   : {nguoi_nhan}")
+    print(f"Số thư    : {len(bo)} thư rời + {len(luong)} lượt trong MỘT luồng\n")
+
+    for i, (ng, td, _t, cc, tep) in enumerate(bo, 1):
+        dau = []
+        if tep:
+            dau.append("📎 " + ", ".join(
+                f"{t['name']} ({len(t['content']):,}B)" for t in tep))
+        if cc:
+            dau.append("Cc: " + ", ".join(_dia_chi_cong(tai_khoan, h) for h in cc))
+        print(f"  {i:>2}. {ng:<26} │ {td}")
+        for d in dau:
+            print(f"      {d}")
+    print(f"\n  ── luồng '{luong[0][1]}' ({len(luong)} lượt) ──")
+    for k, (ng, td, _t, tep) in enumerate(luong, 1):
+        ghi = ("  📎 " + ", ".join(t["name"] for t in tep)) if tep else ""
+        print(f"  L{k}. {ng:<26} │ {td}{ghi}")
+
+    if not gui_that:
+        print("\n── XEM TRƯỚC, CHƯA GỬI GÌ ──")
+        print("Gửi thư là việc KHÔNG HOÀN TÁC ĐƯỢC. Chạy lại kèm --gui-that nếu chắc chắn.")
+        print("Dọn lại nếu cần: mở Gmail, tìm  from:me to:me newer_than:1d")
+        return 0
+
+    xong = 0
+    for i, (ng, td, than, cc, tep) in enumerate(bo, 1):
+        try:
+            gmail_send.send_email(
+                token, to=nguoi_nhan, subject=td, body=than,
+                cc=[_dia_chi_cong(tai_khoan, h) for h in cc] or None,
+                attachments=tep or None,
+                from_addr=f'"{ng}" <{tai_khoan}>',
+            )
+            xong += 1
+            print(f"  [{i}/{len(bo)}] đã gửi: {ng} │ {td}")
+        except Exception as exc:
+            print(f"  [{i}/{len(bo)}] LỖI: {td} — {exc}")
+        if i < len(bo):
+            time.sleep(0.5)
+
+    # Luồng: gửi lượt đầu (KÈM TỆP) rồi trả lời vào chính nó hai lần, để Gmail gom
+    # đúng một threadId. Ba thư rời cùng tiêu đề KHÔNG ra một luồng — xem chú thích ở
+    # nhánh --bo-prompt.
+    print(f"\n── Luồng ba lượt, TỆP nằm ở lượt ĐẦU ──")
+    try:
+        ng, td, than, tep = luong[0]
+        dau = gmail_send.send_email(
+            token, to=nguoi_nhan, subject=td, body=than,
+            attachments=tep or None, from_addr=f'"{ng}" <{tai_khoan}>',
+        )
+        mid = dau.get("id", "")
+        print(f"  [1/{len(luong)}] đã gửi kèm tệp: {ng} │ {td}")
+        for k, (ng2, _td2, than2, tep2) in enumerate(luong[1:], start=2):
+            time.sleep(1.0)
+            tra = gmail_send.reply_email(
+                token, mid, than2, attachments=tep2 or None,
+                from_addr=f'"{ng2}" <{tai_khoan}>',
+            )
+            mid = tra.get("id", mid)
+            print(f"  [{k}/{len(luong)}] đã trả lời trong luồng: {ng2}")
+        xong += len(luong)
+    except Exception as exc:
+        print(f"  LỖI khi dựng luồng: {exc}")
+
+    print(f"\nĐã gửi {xong}/{len(bo) + len(luong)} thư.")
+    print("Mở MeoArc, bấm làm mới ở khung Thư. Kiểm ba thứ bằng MẮT trước khi tin:")
+    print("  1. Thư của Tài/Tiến/Giáo vụ có hiện chip tệp đính kèm không")
+    print("  2. Thư 'Góp ý slide bảo vệ' mở ra có thấy dòng Cc ba người không")
+    print("  3. Mở luồng 'Đặc tả tool MCP', xem lượt ĐẦU có còn thấy tệp không")
+    return 0 if xong else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Gửi bộ thư demo vào hộp thư đang đăng nhập.")
     ap.add_argument("--gui-that", action="store_true",
@@ -637,6 +728,12 @@ def main() -> int:
                          "cuối. Luồng thật là thứ mọi bộ trước đây thiếu — không có nó "
                          "thì câu 'thầy có đổi yêu cầu gì so với lần trước không' không "
                          "kiểm được.")
+    ap.add_argument("--lam-giau-2", action="store_true",
+                    help="VÒNG LÀM GIÀU THỨ HAI: 10 thư có TỆP ĐÍNH KÈM và có Cc, kèm "
+                         "một luồng ba lượt mà TỆP NẰM Ở LƯỢT ĐẦU. Gieo đúng bốn thứ "
+                         "hộp thư hiện tại không có, nên bốn tính năng đã viết xong "
+                         "(đính kèm, trả lời tất cả, đính kèm trong luồng, tìm theo "
+                         "nghĩa) mới có chỗ để demo.")
     args = ap.parse_args()
 
     db = SessionLocal()
@@ -697,6 +794,10 @@ def main() -> int:
 
         if bo_qua:
             print(f"(Bỏ qua {len(bo_qua)} tài khoản không dùng được: {', '.join(bo_qua)})\n")
+
+        if args.lam_giau_2:
+            return _lam_giau_2(token, user.email, args.email or user.email,
+                               args.gui_that)
 
         if args.chi_luong:
             bo = []
